@@ -1,0 +1,18 @@
+{
+  "video_id": "0005",
+  "exercise_info": null,
+  "techniques_applied": {
+    "imputation_spatial": "neighbor-mean-COCO",
+    "normalization": "skeleton-based-torso",
+    "imputation_temporal": "linear-per-joint",
+    "fps_sync": "no_change"
+  },
+  "source_fps": 30.0,
+  "target_fps": 30.0,
+  "statistics": {
+    "num_frames": 4887,
+    "mean_confidence": 0.9205491542816162,
+    "joint_coverage": 1.0
+  },
+  "imputation_rate": 1.5407022231851613
+}

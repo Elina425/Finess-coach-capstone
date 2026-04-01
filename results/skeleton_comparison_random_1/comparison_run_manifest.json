@@ -1,0 +1,14 @@
+{
+  "dataset_root": "/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data",
+  "seed": 2026,
+  "randomize": true,
+  "num_videos": 6,
+  "videos": [
+    "/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0067.mp4",
+    "/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0126.mp4",
+    "/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0191.mp4",
+    "/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0200.mp4",
+    "/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0063.mp4",
+    "/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0102.mp4"
+  ]
+}

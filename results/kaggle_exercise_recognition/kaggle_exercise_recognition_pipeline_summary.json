@@ -1,0 +1,57 @@
+{
+  "dataset_root": "/Users/emelkonyan/.cache/kagglehub/datasets/muhannadtuameh/exercise-recognition/versions/5",
+  "input_frames": 1372,
+  "output_frames": 1372,
+  "source_fps": 30.0,
+  "target_fps": 30.0,
+  "techniques_applied": {
+    "imputation_spatial": "neighbor-mean-COCO",
+    "normalization": "skeleton-based-torso",
+    "imputation_temporal": "linear-per-joint",
+    "fps_sync": "no_change"
+  },
+  "technique_list": [
+    "normalization",
+    "imputation",
+    "fps_sync"
+  ],
+  "keypoints_npz": "kaggle_exercise_recognition_keypoints.npz",
+  "biomechanics_npz": "kaggle_exercise_recognition_biomechanics.npz",
+  "biomechanics_summary_json": "kaggle_exercise_recognition_biomechanics_summary.json",
+  "biomechanics_process_npz": {
+    "source_npz": "kaggle_exercise_recognition_keypoints.npz",
+    "output_npz": "kaggle_exercise_recognition_biomechanics.npz",
+    "num_frames": 1372,
+    "angle_names": [
+      "left_elbow",
+      "right_elbow",
+      "left_knee",
+      "right_knee",
+      "left_hip",
+      "right_hip",
+      "left_shoulder",
+      "right_shoulder"
+    ],
+    "per_angle_mean_deg": {
+      "left_elbow": 121.15349463422442,
+      "right_elbow": 119.32089812420118,
+      "left_knee": 145.559614490446,
+      "right_knee": 147.03304281878547,
+      "left_hip": 145.22006018217235,
+      "right_hip": 145.62732662772467,
+      "left_shoulder": 74.16651139149624,
+      "right_shoulder": 73.91797038764203
+    },
+    "per_angle_std_deg": {
+      "left_elbow": 58.18687718294161,
+      "right_elbow": 59.33847391809201,
+      "left_knee": 44.41427657964412,
+      "right_knee": 43.23935997506503,
+      "left_hip": 45.195284773366836,
+      "right_hip": 45.26844040404772,
+      "left_shoulder": 62.10239236413124,
+      "right_shoulder": 61.35206577901705
+    },
+    "fraction_valid": 1.0
+  }
+}

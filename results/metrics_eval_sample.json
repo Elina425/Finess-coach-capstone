@@ -1,0 +1,98 @@
+{
+  "reference": "vitpose",
+  "reference_label": "ViTPose (RTMPose)",
+  "pck_threshold_scale": 0.05,
+  "note": "PCK/MPJPE/OKS are vs reference model, not human labels.",
+  "per_video": [
+    {
+      "video": "qevd-fit-coach-data/videos/long_range/0000.mp4",
+      "frames_used": 15,
+      "h": 360,
+      "w": 640,
+      "per_model": {
+        "mediapipe": {
+          "fps": 58.897372616059954,
+          "sec_per_frame": 0.016978686070069672,
+          "num_frames": 15,
+          "pck_0.05": 0.03214285714285715,
+          "mpjpe": 213.63040314144655,
+          "oks": 0.4881956309454267,
+          "num_keypoints": 17
+        },
+        "yolo": {
+          "fps": 9.028118755039998,
+          "sec_per_frame": 0.1107650471967645,
+          "num_frames": 15,
+          "pck_0.05": 0.6195021645021644,
+          "mpjpe": 33.93851072640861,
+          "oks": 0.9815182219813858,
+          "num_keypoints": 17
+        },
+        "movenet": {
+          "fps": 49.96148783511516,
+          "sec_per_frame": 0.02001541674059505,
+          "num_frames": 15,
+          "pck_0.05": NaN,
+          "mpjpe": NaN,
+          "oks": NaN,
+          "num_keypoints": 17
+        },
+        "vitpose": {
+          "fps": 4.2727952840000905,
+          "sec_per_frame": 0.23403882787097247,
+          "num_frames": 15,
+          "pck_0.05": 1.0,
+          "mpjpe": 0.0,
+          "oks": 1.0,
+          "num_keypoints": 17
+        },
+        "detrpose": {
+          "fps": 5.728379159358697,
+          "sec_per_frame": 0.17456945013254882,
+          "num_frames": 15,
+          "pck_0.05": 0.0,
+          "mpjpe": NaN,
+          "oks": NaN,
+          "num_keypoints": 17
+        }
+      }
+    }
+  ],
+  "macro_average": {
+    "vitpose": {
+      "note": "reference (pseudo-GT)"
+    },
+    "mediapipe": {
+      "fps": 58.897372616059954,
+      "sec_per_frame": 0.016978686070069672,
+      "pck_0.05": 0.03214285714285715,
+      "mpjpe": 213.63040314144655,
+      "oks": 0.4881956309454267,
+      "num_keypoints": 17
+    },
+    "yolo": {
+      "fps": 9.028118755039998,
+      "sec_per_frame": 0.1107650471967645,
+      "pck_0.05": 0.6195021645021644,
+      "mpjpe": 33.93851072640861,
+      "oks": 0.9815182219813858,
+      "num_keypoints": 17
+    },
+    "movenet": {
+      "fps": 49.96148783511516,
+      "sec_per_frame": 0.02001541674059505,
+      "pck_0.05": NaN,
+      "mpjpe": NaN,
+      "oks": NaN,
+      "num_keypoints": 17
+    },
+    "detrpose": {
+      "fps": 5.728379159358697,
+      "sec_per_frame": 0.17456945013254882,
+      "pck_0.05": 0.0,
+      "mpjpe": NaN,
+      "oks": NaN,
+      "num_keypoints": 17
+    }
+  }
+}

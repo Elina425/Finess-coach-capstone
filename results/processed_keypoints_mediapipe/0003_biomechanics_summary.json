@@ -1,0 +1,36 @@
+{
+  "source_npz": "0003_keypoints.npz",
+  "output_npz": "0003_biomechanics.npz",
+  "num_frames": 4819,
+  "angle_names": [
+    "left_elbow",
+    "right_elbow",
+    "left_knee",
+    "right_knee",
+    "left_hip",
+    "right_hip",
+    "left_shoulder",
+    "right_shoulder"
+  ],
+  "per_angle_mean_deg": {
+    "left_elbow": 147.11782692441597,
+    "right_elbow": 142.77028099092922,
+    "left_knee": 164.8635479408317,
+    "right_knee": 170.5188706032652,
+    "left_hip": 165.60718904670003,
+    "right_hip": 167.03384215846827,
+    "left_shoulder": 30.30968285587764,
+    "right_shoulder": 33.24192138748584
+  },
+  "per_angle_std_deg": {
+    "left_elbow": 46.019186815415416,
+    "right_elbow": 52.73219814247983,
+    "left_knee": 28.44181226713133,
+    "right_knee": 17.717817021645665,
+    "left_hip": 16.206583007655578,
+    "right_hip": 15.371005884380299,
+    "left_shoulder": 29.41483893116444,
+    "right_shoulder": 30.131729010657036
+  },
+  "fraction_valid": 1.0
+}

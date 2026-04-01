@@ -1,0 +1,310 @@
+{
+  "reference": "vitpose",
+  "reference_label": "ViTPose (RTMPose)",
+  "pck_threshold_scale": 0.05,
+  "note": "PCK/MPJPE/OKS are vs reference model, not human labels.",
+  "per_video": [
+    {
+      "video": "qevd-fit-coach-data/videos/long_range/0065.mp4",
+      "frames_used": 80,
+      "h": 360,
+      "w": 640,
+      "per_model": {
+        "mediapipe": {
+          "fps": 82.4778654382661,
+          "sec_per_frame": 0.012124465087526914,
+          "num_frames": 80,
+          "pck_0.05": 0.2582697245564892,
+          "mpjpe": 56.273034689991874,
+          "oks": 0.8624993937663095,
+          "num_keypoints": 17
+        },
+        "yolo": {
+          "fps": 11.163164994447285,
+          "sec_per_frame": 0.08958032963746518,
+          "num_frames": 80,
+          "pck_0.05": 0.0891787196032479,
+          "mpjpe": 86.6528057024456,
+          "oks": 0.9040772614649163,
+          "num_keypoints": 17
+        },
+        "movenet": {
+          "fps": 91.32548322337034,
+          "sec_per_frame": 0.010949846249968687,
+          "num_frames": 80,
+          "pck_0.05": NaN,
+          "mpjpe": NaN,
+          "oks": NaN,
+          "num_keypoints": 17
+        },
+        "vitpose": {
+          "fps": 4.494201370975279,
+          "sec_per_frame": 0.22250894373764823,
+          "num_frames": 80,
+          "pck_0.05": 1.0,
+          "mpjpe": 0.0,
+          "oks": 1.0,
+          "num_keypoints": 17
+        },
+        "detrpose": {
+          "fps": 5.565475984812024,
+          "sec_per_frame": 0.1796791510248113,
+          "num_frames": 80,
+          "pck_0.05": 0.049528527028527024,
+          "mpjpe": 85.0804009721159,
+          "oks": 0.9147011416611217,
+          "num_keypoints": 17
+        }
+      }
+    },
+    {
+      "video": "qevd-fit-coach-data/videos/long_range/0007.mp4",
+      "frames_used": 80,
+      "h": 360,
+      "w": 640,
+      "per_model": {
+        "mediapipe": {
+          "fps": 60.62315100712825,
+          "sec_per_frame": 0.01649534845000744,
+          "num_frames": 80,
+          "pck_0.05": 0.14066870629370629,
+          "mpjpe": 153.29730004169465,
+          "oks": 0.770568112857803,
+          "num_keypoints": 17
+        },
+        "yolo": {
+          "fps": 10.752324211656862,
+          "sec_per_frame": 0.0930031479999343,
+          "num_frames": 80,
+          "pck_0.05": 0.024523809523809524,
+          "mpjpe": 92.87693097412611,
+          "oks": 0.9446223472950432,
+          "num_keypoints": 17
+        },
+        "movenet": {
+          "fps": 110.73598680706642,
+          "sec_per_frame": 0.00903048799973476,
+          "num_frames": 80,
+          "pck_0.05": NaN,
+          "mpjpe": NaN,
+          "oks": NaN,
+          "num_keypoints": 17
+        },
+        "vitpose": {
+          "fps": 4.42391727436796,
+          "sec_per_frame": 0.22604400986292603,
+          "num_frames": 80,
+          "pck_0.05": 1.0,
+          "mpjpe": 0.0,
+          "oks": 1.0,
+          "num_keypoints": 17
+        },
+        "detrpose": {
+          "fps": 5.292943294486999,
+          "sec_per_frame": 0.18893079792514983,
+          "num_frames": 80,
+          "pck_0.05": 0.0,
+          "mpjpe": NaN,
+          "oks": NaN,
+          "num_keypoints": 17
+        }
+      }
+    },
+    {
+      "video": "qevd-fit-coach-data/videos/long_range/0115.mp4",
+      "frames_used": 80,
+      "h": 360,
+      "w": 640,
+      "per_model": {
+        "mediapipe": {
+          "fps": 61.74031489680266,
+          "sec_per_frame": 0.016196872362434077,
+          "num_frames": 80,
+          "pck_0.05": 0.894651013814617,
+          "mpjpe": 8.45718152266043,
+          "oks": 0.948759358681366,
+          "num_keypoints": 17
+        },
+        "yolo": {
+          "fps": 11.056073744125037,
+          "sec_per_frame": 0.09044802188764152,
+          "num_frames": 80,
+          "pck_0.05": 0.9538176804812835,
+          "mpjpe": 11.76573924768629,
+          "oks": 0.9509414314888428,
+          "num_keypoints": 17
+        },
+        "movenet": {
+          "fps": 116.16114307489656,
+          "sec_per_frame": 0.008608730712603574,
+          "num_frames": 80,
+          "pck_0.05": NaN,
+          "mpjpe": NaN,
+          "oks": NaN,
+          "num_keypoints": 17
+        },
+        "vitpose": {
+          "fps": 4.321684378341561,
+          "sec_per_frame": 0.23139126147470962,
+          "num_frames": 80,
+          "pck_0.05": 1.0,
+          "mpjpe": 0.0,
+          "oks": 1.0,
+          "num_keypoints": 17
+        },
+        "detrpose": {
+          "fps": 5.567453990755687,
+          "sec_per_frame": 0.1796153145873177,
+          "num_frames": 80,
+          "pck_0.05": 0.8892673992673993,
+          "mpjpe": 12.98816539345383,
+          "oks": 0.944533792508633,
+          "num_keypoints": 17
+        }
+      }
+    },
+    {
+      "video": "qevd-fit-coach-data/videos/long_range/0107.mp4",
+      "frames_used": 80,
+      "h": 360,
+      "w": 640,
+      "per_model": {
+        "mediapipe": {
+          "fps": 59.58646233840835,
+          "sec_per_frame": 0.016782335462721676,
+          "num_frames": 80,
+          "pck_0.05": 0.6512769338504633,
+          "mpjpe": 27.866041283926503,
+          "oks": 0.8899605508854336,
+          "num_keypoints": 17
+        },
+        "yolo": {
+          "fps": 10.838318479222337,
+          "sec_per_frame": 0.0922652348624979,
+          "num_frames": 80,
+          "pck_0.05": 0.8568766139905846,
+          "mpjpe": 17.514936667884104,
+          "oks": 0.9352869242739953,
+          "num_keypoints": 17
+        },
+        "movenet": {
+          "fps": 117.2564278316371,
+          "sec_per_frame": 0.008528317112268268,
+          "num_frames": 80,
+          "pck_0.05": NaN,
+          "mpjpe": NaN,
+          "oks": NaN,
+          "num_keypoints": 17
+        },
+        "vitpose": {
+          "fps": 4.330545620569971,
+          "sec_per_frame": 0.23091778441266797,
+          "num_frames": 80,
+          "pck_0.05": 1.0,
+          "mpjpe": 0.0,
+          "oks": 1.0,
+          "num_keypoints": 17
+        },
+        "detrpose": {
+          "fps": 5.533512817999495,
+          "sec_per_frame": 0.18071702965016812,
+          "num_frames": 80,
+          "pck_0.05": 0.8000728009735362,
+          "mpjpe": 9.99024105013201,
+          "oks": 0.9740370408675048,
+          "num_keypoints": 17
+        }
+      }
+    },
+    {
+      "video": "qevd-fit-coach-data/videos/long_range/0102.mp4",
+      "frames_used": 80,
+      "h": 360,
+      "w": 640,
+      "per_model": {
+        "mediapipe": {
+          "fps": 60.557032027481995,
+          "sec_per_frame": 0.01651335883743741,
+          "num_frames": 80,
+          "pck_0.05": 0.8495404411764707,
+          "mpjpe": 17.601462753760522,
+          "oks": 0.8773558628354753,
+          "num_keypoints": 17
+        },
+        "yolo": {
+          "fps": 11.081542498950627,
+          "sec_per_frame": 0.09024014482592975,
+          "num_frames": 80,
+          "pck_0.05": 0.8030698529411765,
+          "mpjpe": 22.112834279858312,
+          "oks": 0.8747011806630882,
+          "num_keypoints": 17
+        },
+        "movenet": {
+          "fps": 115.09474831475296,
+          "sec_per_frame": 0.00868849373791818,
+          "num_frames": 80,
+          "pck_0.05": NaN,
+          "mpjpe": NaN,
+          "oks": NaN,
+          "num_keypoints": 17
+        },
+        "vitpose": {
+          "fps": 4.38720235060798,
+          "sec_per_frame": 0.22793569114983256,
+          "num_frames": 80,
+          "pck_0.05": 1.0,
+          "mpjpe": 0.0,
+          "oks": 1.0,
+          "num_keypoints": 17
+        },
+        "detrpose": {
+          "fps": 5.411856101657291,
+          "sec_per_frame": 0.18477948807503708,
+          "num_frames": 80,
+          "pck_0.05": 0.8464705882352941,
+          "mpjpe": 19.77583435982876,
+          "oks": 0.8749882486034372,
+          "num_keypoints": 17
+        }
+      }
+    }
+  ],
+  "macro_average": {
+    "vitpose": {
+      "note": "reference (pseudo-GT)"
+    },
+    "mediapipe": {
+      "fps": 64.99696514161747,
+      "sec_per_frame": 0.015622476040025502,
+      "pck_0.05": 0.5588813639383493,
+      "mpjpe": 52.6990040584068,
+      "oks": 0.8698286558052775,
+      "num_keypoints": 17
+    },
+    "yolo": {
+      "fps": 10.97828478568043,
+      "sec_per_frame": 0.09110737584269371,
+      "pck_0.05": 0.5454933353080204,
+      "mpjpe": 46.18464937440008,
+      "oks": 0.9219258290371771,
+      "num_keypoints": 17
+    },
+    "movenet": {
+      "fps": 110.11475785034467,
+      "sec_per_frame": 0.009161175162498694,
+      "pck_0.05": NaN,
+      "mpjpe": NaN,
+      "oks": NaN,
+      "num_keypoints": 17
+    },
+    "detrpose": {
+      "fps": 5.474248437942299,
+      "sec_per_frame": 0.1827443562524968,
+      "pck_0.05": 0.5170678631009513,
+      "mpjpe": 31.958660443882625,
+      "oks": 0.9270650559101742,
+      "num_keypoints": 17
+    }
+  }
+}

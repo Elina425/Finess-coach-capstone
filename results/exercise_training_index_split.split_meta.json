@@ -1,0 +1,12 @@
+{
+  "input": "/Users/emelkonyan/Finess-coach-capstone/results/exercise_training_index.csv",
+  "output": "/Users/emelkonyan/Finess-coach-capstone/results/exercise_training_index_split.csv",
+  "test_ratio": 0.15,
+  "val_ratio": 0.15,
+  "seed": 42,
+  "counts": {
+    "train": 208538,
+    "val": 44687,
+    "test": 44687
+  }
+}

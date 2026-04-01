@@ -1,0 +1,9 @@
+{
+  "num_rows": 10,
+  "num_classes": 3,
+  "classes": [
+    "alternating v ups",
+    "criss-cross (feet on the floor)",
+    "elbow plank"
+  ]
+}

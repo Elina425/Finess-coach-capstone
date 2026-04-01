@@ -1,0 +1,15 @@
+{
+  "video_id": "0001",
+  "exercise_info": null,
+  "techniques_applied": {
+    "normalization": "skeleton-based",
+    "imputation": "confidence-based",
+    "fps_sync": "no_change"
+  },
+  "statistics": {
+    "num_frames": 4927,
+    "mean_confidence": 0.8956844210624695,
+    "joint_coverage": 0.9545362289425614
+  },
+  "imputation_rate": 2.9226709965496247
+}

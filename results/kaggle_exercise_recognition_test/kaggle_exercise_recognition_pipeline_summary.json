@@ -1,0 +1,22 @@
+{
+  "dataset_root": "/Users/emelkonyan/.cache/kagglehub/datasets/muhannadtuameh/exercise-recognition/versions/5",
+  "frames": 1372,
+  "techniques_applied": {
+    "imputation_spatial": "neighbor-mean-COCO",
+    "normalization": "skeleton-based-torso",
+    "imputation_temporal": "linear-per-joint",
+    "fps_sync": "no_change"
+  },
+  "keypoints_npz": "kaggle_exercise_recognition_keypoints.npz",
+  "biomechanics_npz": "kaggle_exercise_recognition_biomechanics.npz",
+  "angle_names": [
+    "left_elbow",
+    "right_elbow",
+    "left_knee",
+    "right_knee",
+    "left_hip",
+    "right_hip",
+    "left_shoulder",
+    "right_shoulder"
+  ]
+}

@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "/Users/emelkonyan/Finess-coach-capstone/run_pipeline.py", line 9, in <module>
+    from comprehensive_pipeline import ComprehensivePipeline
+  File "/Users/emelkonyan/Finess-coach-capstone/comprehensive_pipeline.py", line 14, in <module>
+    from pose_estimation_core import (
+    ...<2 lines>...
+    )
+  File "/Users/emelkonyan/Finess-coach-capstone/pose_estimation_core.py", line 443
+    threshold: float = 0.3) -> Tuple[np.ndarray, np.ndarray]:
+IndentationError: unexpected indent

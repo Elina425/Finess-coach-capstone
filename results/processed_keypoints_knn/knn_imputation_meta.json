@@ -1,0 +1,9 @@
+{
+  "method": "KMeans+KNN (OPSTL Sec II-D, feature=resampled skeleton)",
+  "reference": "https://arxiv.org/html/2309.12029v2",
+  "n_sequences": 3,
+  "n_clusters": 3,
+  "k_neighbors": 5,
+  "target_t": 32,
+  "seed": 42
+}

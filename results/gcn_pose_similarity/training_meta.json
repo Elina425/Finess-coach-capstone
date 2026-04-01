@@ -1,0 +1,6 @@
+{
+  "paper": "Zeng et al., Topology-Aware GCN for Pose Similarity / AQA, arXiv:2511.01194",
+  "train_stems": 3,
+  "index_csv": "/Users/emelkonyan/Finess-coach-capstone/results/exercise_training_index_long_range.csv",
+  "keypoints_dir": "/Users/emelkonyan/Finess-coach-capstone/results/processed_keypoints_mediapipe"
+}

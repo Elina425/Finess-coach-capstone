@@ -1,0 +1,16 @@
+{
+  "class_to_idx": {
+    "jumping_jacks": 0,
+    "pullups": 1,
+    "pushups": 2,
+    "situp": 3,
+    "squats": 4
+  },
+  "idx_to_class": {
+    "0": "jumping_jacks",
+    "1": "pullups",
+    "2": "pushups",
+    "3": "situp",
+    "4": "squats"
+  }
+}

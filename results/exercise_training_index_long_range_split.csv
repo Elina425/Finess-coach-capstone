@@ -1,0 +1,4 @@
+video_stem,video_path,video_key,exercise_class,quality,split,num_labels
+0000,/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0000.mp4,videos/long_range/0000.mp4,pseudo_3,0.6575,test,1
+0001,/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0001.mp4,videos/long_range/0001.mp4,pseudo_2,0.717,train,1
+0002,/Users/emelkonyan/Finess-coach-capstone/qevd-fit-coach-data/videos/long_range/0002.mp4,videos/long_range/0002.mp4,pseudo_4,0.853,val,1

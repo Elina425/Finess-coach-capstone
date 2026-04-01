@@ -1,0 +1,24 @@
+{
+  "num_rows": 100,
+  "num_classes": 18,
+  "classes": [
+    "alternating single leg glutes bridge",
+    "alternating v ups",
+    "child pose",
+    "criss-cross",
+    "criss-cross (feet on the floor)",
+    "downward dog",
+    "downward dog (frontal)",
+    "elbow plank",
+    "raised leg circles (clockwise)",
+    "raised leg circles (counterclockwise)",
+    "reverse crunches",
+    "roll down",
+    "side plank",
+    "the hundred (extended legs)",
+    "the hundred (feet on the floor)",
+    "the hundred (table-top position)",
+    "toe touch",
+    "wide-legged forward fold"
+  ]
+}

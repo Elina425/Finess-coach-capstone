@@ -1,0 +1,11 @@
+video_stem,video_path,video_key,exercise_class,quality,split,num_labels
+00000000,,videos/short_clips/00000000.mp4,elbow plank,0.63,train,1
+00000001,,videos/short_clips/00000001.mp4,elbow plank,0.54,train,1
+00000002,,videos/short_clips/00000002.mp4,elbow plank,0.63,train,1
+00000003,,videos/short_clips/00000003.mp4,elbow plank,0.63,train,1
+00000004,,videos/short_clips/00000004.mp4,elbow plank,0.63,train,1
+00000005,,videos/short_clips/00000005.mp4,elbow plank,0.63,train,1
+00000006,,videos/short_clips/00000006.mp4,elbow plank,0.63,train,1
+00000007,,videos/short_clips/00000007.mp4,elbow plank,0.63,train,1
+00000008,,videos/short_clips/00000008.mp4,alternating v ups,0.61,train,2
+00000009,,videos/short_clips/00000009.mp4,criss-cross (feet on the floor),0.47,train,2
