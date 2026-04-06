@@ -18,6 +18,11 @@ Examples::
   pip install kagglehub
   ./venv/bin/python kaggle_exercise_recognition_pipeline.py --download
 
+  # Riccardo Riccio dataset (video folders; runs MediaPipe — slow on full data):
+  ./venv/bin/python kaggle_exercise_recognition_pipeline.py --download --riccio --riccio-max-videos 30
+
+  ./venv/bin/python riccio_kaggle_video_pipeline.py --dataset-root ~/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3
+
   ./venv/bin/python kaggle_exercise_recognition_pipeline.py \\
       --dataset-root ~/.cache/kagglehub/datasets/muhannadtuameh/exercise-recognition/versions/5
 
@@ -41,11 +46,24 @@ import pandas as pd
 from biomechanical_features import process_npz_file
 from pose_estimation_core import MEDIAPIPE_TO_COCO, apply_keypoint_preprocessing_pipeline
 
-OUTPUT_STEM = "kaggle_exercise_recognition"
-KAGGLE_SLUG = "muhannadtuameh/exercise-recognition"
+SLUG_MUHANNAD = "muhannadtuameh/exercise-recognition"
+SLUG_RICCIO = "riccardoriccio/real-time-exercise-recognition-dataset"
+DEFAULT_OUTPUT_STEM = "kaggle_exercise_recognition"
+STEM_RICCIO = "riccio_realtime_exercise_recognition"
+DEFAULT_OUTPUT_DIR_KAGGLE = "./results/kaggle_exercise_recognition"
+DEFAULT_OUTPUT_DIR_RICCIO = "./results/riccio_realtime_exercise_recognition"
 
 
-def maybe_download() -> Path:
+def hub_versions_root(slug: str) -> Path:
+    """~/.cache/kagglehub/datasets/<owner>/<name>/versions"""
+    parts = slug.strip().split("/", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Expected owner/name Kaggle slug, got: {slug!r}")
+    owner, name = parts
+    return Path.home() / ".cache/kagglehub/datasets" / owner / name / "versions"
+
+
+def maybe_download(slug: str) -> Path:
     try:
         import kagglehub
     except ImportError as e:
@@ -53,23 +71,34 @@ def maybe_download() -> Path:
             "pip install kagglehub\n"
             "Or pass --dataset-root to an extracted exercise-recognition folder."
         ) from e
-    p = kagglehub.dataset_download(KAGGLE_SLUG)
+    p = kagglehub.dataset_download(slug)
     print("Dataset path:", p)
     return Path(p)
 
 
-def resolve_dataset_root(cli_path: str) -> Path:
-    """CLI path, EXERCISE_RECOGNITION_ROOT, or newest kagglehub cache version with landmarks.csv."""
+def resolve_dataset_root(cli_path: str, slug: str) -> Path:
+    """CLI path, EXERCISE_RECOGNITION_ROOT, or newest kagglehub cache (landmarks.csv or Riccio video folders)."""
+    from riccio_kaggle_video_pipeline import is_riccio_kaggle_video_layout
+
     if cli_path.strip():
         return Path(cli_path).expanduser().resolve()
     env = os.environ.get("EXERCISE_RECOGNITION_ROOT", "").strip()
     if env:
         return Path(env).expanduser().resolve()
-    hub = Path.home() / ".cache/kagglehub/datasets/muhannadtuameh/exercise-recognition"
+    hub = hub_versions_root(slug)
     if hub.is_dir():
-        for v in sorted(hub.glob("versions/*"), key=lambda p: p.name, reverse=True):
-            if v.is_dir() and (v / "landmarks.csv").is_file():
+        versions = sorted(
+            [p for p in hub.glob("*") if p.is_dir()],
+            key=lambda p: p.name,
+            reverse=True,
+        )
+        for v in versions:
+            if (v / "landmarks.csv").is_file():
                 print(f"Using kagglehub cache: {v}")
+                return v.resolve()
+        for v in versions:
+            if is_riccio_kaggle_video_layout(v):
+                print(f"Using kagglehub cache (Riccio video layout, no landmarks.csv): {v}")
                 return v.resolve()
     raise FileNotFoundError(
         "No dataset folder found. Pass --dataset-root, set EXERCISE_RECOGNITION_ROOT, "
@@ -83,8 +112,12 @@ def build_preprocessing_techniques(
     bone_proportion: bool,
     laplacian_spatial: bool,
     dwt: bool,
+    savgol: bool = False,
+    kalman: bool = False,
 ) -> List[str]:
     """Match ``keypoint_preprocessing_pipeline.py`` technique list order."""
+    if savgol and kalman:
+        raise ValueError("Use only one of savgol=True or kalman=True for temporal smoothing.")
     techniques = ["normalization", "imputation", "fps_sync"]
     if no_fps_sync:
         techniques = [t for t in techniques if t != "fps_sync"]
@@ -95,6 +128,10 @@ def build_preprocessing_techniques(
             techniques.insert(0, "bone_proportion")
     if laplacian_spatial:
         techniques.append("laplacian_spatial")
+    if savgol:
+        techniques.append("savgol")
+    elif kalman:
+        techniques.append("kalman")
     if dwt:
         techniques.append("dwt")
     return techniques
@@ -129,10 +166,16 @@ def run_pipeline(
     root: Path,
     out_dir: Path,
     *,
+    output_stem: str,
+    kaggle_slug: str,
     source_fps: float,
     target_fps: float,
     techniques: Sequence[str],
     skip_biomechanics: bool = False,
+    savgol_window_length: int = 7,
+    savgol_polyorder: int = 2,
+    kalman_process_noise: float = 1e-4,
+    kalman_measurement_noise: float = 1e-2,
 ) -> Dict[str, Any]:
     """
     Core integration: CSV → COCO-17 → apply_keypoint_preprocessing_pipeline → NPZ + angles.
@@ -164,6 +207,10 @@ def run_pipeline(
         target_fps=float(target_fps),
         source_fps=float(source_fps),
         original_frames=t,
+        savgol_window_length=int(savgol_window_length),
+        savgol_polyorder=int(savgol_polyorder),
+        kalman_process_noise=float(kalman_process_noise),
+        kalman_measurement_noise=float(kalman_measurement_noise),
     )
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -179,15 +226,15 @@ def run_pipeline(
         "source_fps": np.array([float(processed.get("source_fps", source_fps))]),
         "target_fps": np.array([float(processed.get("target_fps", target_fps))]),
         "dataset": str(root.resolve()),
-        "kaggle_slug": KAGGLE_SLUG,
+        "kaggle_slug": kaggle_slug,
         "pipeline": "kaggle_exercise_recognition_pipeline",
     }
-    kp_path = out_dir / f"{OUTPUT_STEM}_keypoints.npz"
+    kp_path = out_dir / f"{output_stem}_keypoints.npz"
     np.savez_compressed(kp_path, **save_kw)
 
     if labels_list and len(labels_list) == fk.shape[0]:
         np.savez_compressed(
-            out_dir / f"{OUTPUT_STEM}_labels.npz",
+            out_dir / f"{output_stem}_labels.npz",
             pose=np.array(labels_list, dtype=object),
             pose_id=pose_ids.astype(np.int64),
         )
@@ -206,11 +253,11 @@ def run_pipeline(
         "techniques_applied": processed.get("techniques_applied", {}),
         "technique_list": list(techniques),
         "keypoints_npz": kp_path.name,
-        "biomechanics_npz": f"{OUTPUT_STEM}_biomechanics.npz",
-        "biomechanics_summary_json": f"{OUTPUT_STEM}_biomechanics_summary.json",
+        "biomechanics_npz": f"{output_stem}_biomechanics.npz",
+        "biomechanics_summary_json": f"{output_stem}_biomechanics_summary.json",
         "biomechanics_process_npz": bio_summary,
     }
-    with open(out_dir / f"{OUTPUT_STEM}_pipeline_summary.json", "w") as f:
+    with open(out_dir / f"{output_stem}_pipeline_summary.json", "w") as f:
         json.dump(summary, f, indent=2, default=str)
 
     return summary
@@ -232,7 +279,7 @@ def main() -> int:
     )
     ap.add_argument(
         "--output-dir",
-        default="./results/kaggle_exercise_recognition",
+        default=DEFAULT_OUTPUT_DIR_KAGGLE,
         help="Output directory for NPZ + JSON (same layout as processed_keypoints_* )",
     )
     ap.add_argument(
@@ -259,60 +306,220 @@ def main() -> int:
     )
     ap.add_argument("--dwt", action="store_true", help="Append DWT normalization (PyWavelets)")
     ap.add_argument(
+        "--savgol",
+        action="store_true",
+        help="Savitzky–Golay temporal smoothing (after FPS sync; preserves motion peaks vs box blur)",
+    )
+    ap.add_argument(
+        "--kalman",
+        action="store_true",
+        help="1D constant-velocity Kalman smoothing per joint (alternative to --savgol; pick one)",
+    )
+    ap.add_argument("--savgol-window", type=int, default=7, help="SG filter window length (odd; capped by T)")
+    ap.add_argument("--savgol-poly", type=int, default=2, help="SG polynomial order")
+    ap.add_argument("--kalman-q", type=float, default=1e-4, help="Kalman process noise scale")
+    ap.add_argument("--kalman-r", type=float, default=1e-2, help="Kalman measurement noise")
+    ap.add_argument(
         "--skip-biomechanics",
         action="store_true",
         help="Only write keypoints NPZ (skip angle NPZ and process_npz_file summaries)",
     )
+    ap.add_argument(
+        "--riccio",
+        action="store_true",
+        help=f"Use Kaggle dataset {SLUG_RICCIO} (MediaPipe CSVs) and write outputs as {STEM_RICCIO}_*.npz.",
+    )
+    ap.add_argument(
+        "--kaggle-slug",
+        default="",
+        help="Kaggle dataset id (owner/name). Default: muhannadtuameh/exercise-recognition; "
+        f"--riccio sets {SLUG_RICCIO}.",
+    )
+    ap.add_argument(
+        "--output-stem",
+        default="",
+        help="Prefix for *_keypoints.npz, *_labels.npz, *_biomechanics.npz. "
+        f"Default: {DEFAULT_OUTPUT_STEM}, or {STEM_RICCIO} with --riccio.",
+    )
+    ap.add_argument(
+        "--riccio-max-videos",
+        type=int,
+        default=0,
+        help="Riccio video layout only: cap videos (0=all). Use e.g. 20 while testing.",
+    )
+    ap.add_argument(
+        "--riccio-max-frames",
+        type=int,
+        default=0,
+        help="Riccio video layout only: max frames per clip (0=full video).",
+    )
+    ap.add_argument(
+        "--riccio-subsets",
+        default="similar_dataset,final_kaggle_with_additional_video,synthetic_dataset,my_test_video_1",
+        help="Comma-separated top-level folders to scan for Riccio video layout.",
+    )
+    ap.add_argument(
+        "--riccio-skip-keypoints",
+        action="store_true",
+        help="Riccio video layout: only angles + labels (omit *_keypoints.npz for ST-GCN).",
+    )
+    ap.add_argument(
+        "--riccio-raw-keypoints",
+        action="store_true",
+        help="Riccio video layout: skip normalize/impute/FPS (raw MediaPipe pixels). Default: full preprocessing.",
+    )
 
     args = ap.parse_args()
 
+    if args.riccio and args.kaggle_slug.strip():
+        print("Use only one of --riccio or --kaggle-slug", file=sys.stderr)
+        return 1
+
+    if args.riccio:
+        slug = SLUG_RICCIO
+        output_stem = args.output_stem.strip() or STEM_RICCIO
+    elif args.kaggle_slug.strip():
+        slug = args.kaggle_slug.strip()
+        output_stem = args.output_stem.strip() or DEFAULT_OUTPUT_STEM
+    else:
+        slug = SLUG_MUHANNAD
+        output_stem = args.output_stem.strip() or DEFAULT_OUTPUT_STEM
+
     try:
         if args.download:
-            root = maybe_download()
+            root = maybe_download(slug)
         else:
-            root = resolve_dataset_root(args.dataset_root)
+            root = resolve_dataset_root(args.dataset_root, slug)
     except FileNotFoundError as e:
         print(f"✗ {e}", file=sys.stderr)
         return 1
 
-    if not (root / "landmarks.csv").is_file():
-        print(f"✗ Not found: {root / 'landmarks.csv'}", file=sys.stderr)
-        return 1
-
-    techniques = build_preprocessing_techniques(
-        no_fps_sync=args.no_fps_sync,
-        bone_proportion=args.bone_proportion,
-        laplacian_spatial=args.laplacian_spatial,
-        dwt=args.dwt,
-    )
-
-    print("Preprocessing techniques:", techniques)
-    print(f"FPS: source={args.source_fps} → target={args.target_fps}")
-
     out_dir = Path(args.output_dir)
-    try:
-        summary = run_pipeline(
-            root,
-            out_dir,
-            source_fps=args.source_fps,
-            target_fps=args.target_fps,
-            techniques=techniques,
-            skip_biomechanics=args.skip_biomechanics,
-        )
-    except Exception as e:
-        print(f"✗ {e}", file=sys.stderr)
-        raise
+    if args.riccio and out_dir.resolve() == Path(DEFAULT_OUTPUT_DIR_KAGGLE).resolve():
+        out_dir = Path(DEFAULT_OUTPUT_DIR_RICCIO)
+    out_dir = out_dir.resolve()
 
-    print(f"\n✓ Integrated pipeline → {out_dir.resolve()}/")
-    print(f"  {OUTPUT_STEM}_keypoints.npz  frames={summary['output_frames']}")
-    if not args.skip_biomechanics:
-        bio = summary.get("biomechanics_process_npz") or {}
-        print(
-            f"  {OUTPUT_STEM}_biomechanics.npz  angle frames={bio.get('num_frames')}"
+    from riccio_kaggle_video_pipeline import is_riccio_kaggle_video_layout, run_riccio_video_to_npz
+
+    if (root / "landmarks.csv").is_file():
+        techniques = build_preprocessing_techniques(
+            no_fps_sync=args.no_fps_sync,
+            bone_proportion=args.bone_proportion,
+            laplacian_spatial=args.laplacian_spatial,
+            dwt=args.dwt,
+            savgol=args.savgol,
+            kalman=args.kalman,
         )
-        print(f"  {OUTPUT_STEM}_biomechanics_summary.json")
-    print(f"  {OUTPUT_STEM}_pipeline_summary.json")
-    return 0
+
+        print("Kaggle slug:", slug)
+        print("Output stem:", output_stem)
+        print("Preprocessing techniques:", techniques)
+        print(f"FPS: source={args.source_fps} → target={args.target_fps}")
+
+        try:
+            summary = run_pipeline(
+                root,
+                out_dir,
+                output_stem=output_stem,
+                kaggle_slug=slug,
+                source_fps=args.source_fps,
+                target_fps=args.target_fps,
+                techniques=techniques,
+                skip_biomechanics=args.skip_biomechanics,
+                savgol_window_length=args.savgol_window,
+                savgol_polyorder=args.savgol_poly,
+                kalman_process_noise=args.kalman_q,
+                kalman_measurement_noise=args.kalman_r,
+            )
+        except Exception as e:
+            print(f"✗ {e}", file=sys.stderr)
+            raise
+
+        print(f"\n✓ Integrated pipeline → {out_dir}/")
+        print(f"  {output_stem}_keypoints.npz  frames={summary['output_frames']}")
+        if not args.skip_biomechanics:
+            bio = summary.get("biomechanics_process_npz") or {}
+            print(
+                f"  {output_stem}_biomechanics.npz  angle frames={bio.get('num_frames')}"
+            )
+            print(f"  {output_stem}_biomechanics_summary.json")
+        print(f"  {output_stem}_pipeline_summary.json")
+        return 0
+
+    if is_riccio_kaggle_video_layout(root):
+        print("Kaggle slug:", slug)
+        print("Output stem:", output_stem)
+        riccio_techniques = None
+        if not args.riccio_raw_keypoints:
+            riccio_techniques = build_preprocessing_techniques(
+                no_fps_sync=args.no_fps_sync,
+                bone_proportion=args.bone_proportion,
+                laplacian_spatial=args.laplacian_spatial,
+                dwt=args.dwt,
+                savgol=args.savgol,
+                kalman=args.kalman,
+            )
+            print("Keypoint preprocessing (before angles/features):", riccio_techniques)
+            print(f"FPS: source={args.source_fps} → target={args.target_fps}")
+        else:
+            print("Riccio: --riccio-raw-keypoints (no normalize / impute / FPS sync)")
+        print(
+            "Riccio dataset: video folders (no landmarks.csv). MediaPipe → optional preprocessing → angles "
+            "(use --riccio-max-videos N for a quick test)."
+        )
+        subsets = tuple(s.strip() for s in args.riccio_subsets.split(",") if s.strip())
+        mf = args.riccio_max_frames if args.riccio_max_frames > 0 else None
+        src_override = float(args.source_fps) if args.source_fps > 1e-6 else None
+        try:
+            summary = run_riccio_video_to_npz(
+                root,
+                out_dir,
+                output_stem=output_stem,
+                kaggle_slug=slug,
+                subsets=subsets,
+                max_videos=args.riccio_max_videos,
+                max_frames=mf,
+                skip_keypoints=args.riccio_skip_keypoints,
+                raw_keypoints=args.riccio_raw_keypoints,
+                preprocessing_techniques=riccio_techniques,
+                source_fps=src_override,
+                target_fps=float(args.target_fps),
+                savgol_window_length=args.savgol_window,
+                savgol_polyorder=args.savgol_poly,
+                kalman_process_noise=args.kalman_q,
+                kalman_measurement_noise=args.kalman_r,
+            )
+        except (FileNotFoundError, RuntimeError) as e:
+            print(f"✗ {e}", file=sys.stderr)
+            return 1
+
+        print(f"\n✓ Riccio video pipeline → {out_dir}/")
+        print(f"  {output_stem}_biomechanics.npz  T={summary['total_frames']}")
+        if summary.get("keypoints_npz"):
+            print(f"  {summary['keypoints_npz']} (ST-GCN)")
+        print(f"  {output_stem}_labels.npz")
+        print(f"  {output_stem}_pipeline_summary.json")
+        print("Train BiLSTM:")
+        print(
+            f"  ./venv/bin/python train_exercise_bilstm.py --preset riccio --standardize --eval-test \\\n"
+            f"    --kaggle-angles-dir {out_dir} \\\n"
+            f"    --kaggle-stem {output_stem}"
+        )
+        if summary.get("keypoints_npz"):
+            print("Train ST-GCN:")
+            print(
+                f"  ./venv/bin/python train_exercise_stgcn.py --standardize --eval-test \\\n"
+                f"    --kaggle-keypoints-dir {out_dir} \\\n"
+                f"    --kaggle-stem {output_stem}"
+            )
+        return 0
+
+    print(
+        f"✗ No landmarks.csv and not a Riccio video-folder layout: {root}\n"
+        "  Expected either landmarks.csv (+ labels.csv) or folders like similar_dataset/, synthetic_dataset/.",
+        file=sys.stderr,
+    )
+    return 1
 
 
 if __name__ == "__main__":

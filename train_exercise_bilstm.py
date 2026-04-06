@@ -14,6 +14,12 @@ Requires:
 Example:
   ./venv/bin/python train_exercise_bilstm.py --epochs 20 --preset riccio --standardize
   ./venv/bin/python train_exercise_bilstm.py --feature-mode mixed --keypoints-dir results/processed_keypoints_mediapipe
+
+  # Riccio Kaggle dataset (after kaggle_exercise_recognition_pipeline.py --download --riccio):
+  ./venv/bin/python train_exercise_bilstm.py --preset riccio --standardize --eval-test \\
+    --kaggle-angles-dir results/riccio_realtime_exercise_recognition \\
+    --kaggle-stem riccio_realtime_exercise_recognition
+
   ./venv/bin/python train_exercise_bilstm.py --kaggle-angles-dir results/kaggle_exercise_recognition --standardize --eval-test
 """
 

@@ -7,7 +7,7 @@ import json
 import os
 import csv
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+from typing import Any, Dict, List, Tuple, Optional
 import numpy as np
 import pandas as pd
 from dataclasses import dataclass
@@ -232,6 +232,7 @@ class DatasetPreprocessor:
         exercise_info: Optional[FitExerciseAnnotation],
         preprocessing_techniques: List[str],
         target_fps: float,
+        **apply_pipeline_kwargs: Any,
     ) -> Dict:
         """Spatial impute → torso normalization → temporal impute → FPS resample."""
         print(f"  ✓ Extracted {len(pose_results)} frames")
@@ -274,6 +275,10 @@ class DatasetPreprocessor:
                 )
         if "dwt" in preprocessing_techniques:
             print("  Applying DWT (Discrete Wavelet Transform) normalization...")
+        if "savgol" in preprocessing_techniques:
+            print("  Savitzky–Golay temporal smoothing (reduces jitter, preserves peaks)...")
+        if "kalman" in preprocessing_techniques:
+            print("  Kalman temporal smoothing (1D constant-velocity per joint)...")
 
         processed = apply_keypoint_preprocessing_pipeline(
             keypoint_sequence,
@@ -282,6 +287,7 @@ class DatasetPreprocessor:
             target_fps=float(target_fps),
             source_fps=source_fps,
             original_frames=len(keypoint_sequence),
+            **apply_pipeline_kwargs,
         )
         processed["video_id"] = video_id
         processed["exercise_info"] = exercise_info.to_dict() if exercise_info else None
@@ -315,6 +321,10 @@ class DatasetPreprocessor:
             elif str(dwt_s).startswith("failed"):
                 print(f"    ⚠ DWT normalization failed: {dwt_s}")
                 print("    (Install PyWavelets: pip install PyWavelets)")
+        if "savgol" in preprocessing_techniques or "kalman" in preprocessing_techniques:
+            ts = processed.get("techniques_applied", {}).get("temporal_smooth", "")
+            if ts:
+                print(f"    Temporal smoothing applied: {ts}")
 
         video_processor.close()
 
@@ -327,6 +337,7 @@ class DatasetPreprocessor:
         detector,
         preprocessing_techniques: List[str] = None,
         target_fps: float = 30.0,
+        **apply_pipeline_kwargs: Any,
     ) -> Dict:
         """
         Preprocess single video with selected techniques
@@ -375,6 +386,7 @@ class DatasetPreprocessor:
             exercise_info,
             preprocessing_techniques,
             target_fps,
+            **apply_pipeline_kwargs,
         )
 
     def preprocess_video_file(
@@ -384,6 +396,7 @@ class DatasetPreprocessor:
         video_id: Optional[str] = None,
         preprocessing_techniques: Optional[List[str]] = None,
         target_fps: float = 30.0,
+        **apply_pipeline_kwargs: Any,
     ) -> Optional[Dict]:
         """Same as preprocess_video but with an explicit filesystem path (any .mp4)."""
         if preprocessing_techniques is None:
@@ -409,6 +422,7 @@ class DatasetPreprocessor:
             exercise_info,
             preprocessing_techniques,
             target_fps,
+            **apply_pipeline_kwargs,
         )
     
     def preprocess_batch(
@@ -417,6 +431,7 @@ class DatasetPreprocessor:
         detector,
         preprocessing_techniques: List[str] = None,
         target_fps: float = 30.0,
+        **apply_pipeline_kwargs: Any,
     ) -> Dict[str, Dict]:
         """Preprocess batch of videos"""
         results = {}
@@ -433,6 +448,7 @@ class DatasetPreprocessor:
                     detector,
                     preprocessing_techniques=preprocessing_techniques,
                     target_fps=target_fps,
+                    **apply_pipeline_kwargs,
                 )
                 if result:
                     results[video_id] = result

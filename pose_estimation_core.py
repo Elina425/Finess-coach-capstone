@@ -1031,6 +1031,97 @@ class PosePreprocessor:
                 )(t_dst)
         return [out[i].astype(np.float32) for i in range(T_new)]
 
+    @staticmethod
+    def temporal_smooth_savgol_sequence(
+        keypoint_sequence: List[np.ndarray],
+        window_length: int = 7,
+        polyorder: int = 2,
+    ) -> List[np.ndarray]:
+        """
+        Savitzky–Golay filter along time per joint coordinate: reduces high-frequency jitter while
+        preserving low-order motion (peaks) better than a moving average (polynomial local fit).
+        """
+        if not keypoint_sequence:
+            return keypoint_sequence
+        try:
+            from scipy.signal import savgol_filter
+        except ImportError:
+            print("⚠️  scipy required for Savitzky–Golay smoothing. Install scipy.")
+            return keypoint_sequence
+
+        arr = np.stack([kp.astype(np.float64) for kp in keypoint_sequence], axis=0)
+        T, J, D = arr.shape
+        if T < 3:
+            return keypoint_sequence
+
+        wl = int(window_length)
+        if wl % 2 == 0:
+            wl -= 1
+        wl = min(wl, T if T % 2 == 1 else T - 1)
+        wl = max(wl, 3)
+
+        po = int(polyorder)
+        po = min(max(po, 1), wl - 1)
+
+        out = arr.copy()
+        for j in range(J):
+            for d in range(D):
+                track = out[:, j, d]
+                if np.all(np.abs(track) < 1e-12):
+                    continue
+                try:
+                    out[:, j, d] = savgol_filter(track, wl, po, mode="interp")
+                except Exception as e:
+                    print(f"⚠️  savgol joint {j} dim {d}: {e}")
+        return [out[t].astype(np.float32) for t in range(T)]
+
+    @staticmethod
+    def temporal_smooth_kalman_sequence(
+        keypoint_sequence: List[np.ndarray],
+        process_noise: float = 1e-4,
+        measurement_noise: float = 1e-2,
+    ) -> List[np.ndarray]:
+        """
+        Per-coordinate 1D constant-velocity Kalman filter (forward pass): smooths measurement
+        noise while tracking velocity; alternative to Savitzky–Golay for jitter reduction.
+        """
+        if not keypoint_sequence:
+            return keypoint_sequence
+        arr = np.stack([kp.astype(np.float64) for kp in keypoint_sequence], axis=0)
+        T, J, D = arr.shape
+        if T < 2:
+            return keypoint_sequence
+
+        out = np.zeros_like(arr)
+        q = float(max(process_noise, 1e-12))
+        r = float(max(measurement_noise, 1e-12))
+        F = np.array([[1.0, 1.0], [0.0, 1.0]], dtype=np.float64)
+        H = np.array([1.0, 0.0], dtype=np.float64)
+        Q = np.array([[0.25 * q, 0.5 * q], [0.5 * q, q]], dtype=np.float64)
+
+        for j in range(J):
+            for d in range(D):
+                meas = arr[:, j, d]
+                if np.all(np.abs(meas) < 1e-12):
+                    out[:, j, d] = meas
+                    continue
+                x = np.zeros(2, dtype=np.float64)
+                P = np.eye(2, dtype=np.float64) * 1.0
+                for t in range(T):
+                    x = F @ x
+                    P = F @ P @ F.T + Q
+                    zt = float(meas[t])
+                    S = float(H @ P @ H.T + r)
+                    if S < 1e-18:
+                        out[t, j, d] = x[0]
+                        continue
+                    K = (P @ H) / S
+                    y = zt - float(H @ x)
+                    x = x + K * y
+                    P = (np.eye(2) - np.outer(K, H)) @ P
+                    out[t, j, d] = x[0]
+        return [out[t].astype(np.float32) for t in range(T)]
+
 
 def apply_keypoint_preprocessing_pipeline(
     keypoint_sequence: List[np.ndarray],
@@ -1040,9 +1131,16 @@ def apply_keypoint_preprocessing_pipeline(
     target_fps: float = 30.0,
     source_fps: float = 30.0,
     original_frames: Optional[int] = None,
+    savgol_window_length: int = 7,
+    savgol_polyorder: int = 2,
+    kalman_process_noise: float = 1e-4,
+    kalman_measurement_noise: float = 1e-2,
 ) -> Dict[str, Any]:
     """
-    Canonical order for capstone / thesis step 3 — **before** angle or mixed features:
+    Canonical order for capstone / thesis step 3 — **before** angle or mixed features.
+    Conceptually aligned with robust 2D skeletal handling (joint reliability, missing joints,
+    temporal consistency) discussed in multi-view motion-capture literature such as Jiang et al.
+    (MM'22, D-MAE, DOI 10.1145/3503161.3547796); here we apply analogous **monocular** steps:
 
     1. **Spatial imputation** (if ``imputation`` in techniques): low-confidence joints filled
        in-frame — default: COCO edge neighbors; if ``laplacian_spatial`` is also listed,
@@ -1056,6 +1154,10 @@ def apply_keypoint_preprocessing_pipeline(
        flickering joints (uses confidence masks).
     5. **FPS resampling** (if ``fps_sync``): linear interpolation in time to ``target_fps``
        so datasets with different native rates share a common timeline (e.g. 30 Hz).
+    6. **Temporal smoothing** (optional): ``savgol`` — Savitzky–Golay filter along time (local
+       polynomial fit; preserves motion peaks better than box smoothing); or ``kalman`` —
+       constant-velocity Kalman per joint coordinate. Use at most one of ``savgol`` / ``kalman``.
+       Applied after rate sync, before ``dwt``.
 
     Optional ``dwt`` appends wavelet-based normalization (requires PyWavelets).
 
@@ -1065,6 +1167,8 @@ def apply_keypoint_preprocessing_pipeline(
     if preprocessing_techniques is None:
         preprocessing_techniques = ["normalization", "imputation", "fps_sync"]
     techniques = list(preprocessing_techniques)
+    if "savgol" in techniques and "kalman" in techniques:
+        raise ValueError("Use only one of 'savgol' or 'kalman' temporal smoothing.")
     n_frames = original_frames if original_frames is not None else len(keypoint_sequence)
     if len(keypoint_sequence) != len(confidence_sequence):
         raise ValueError(
@@ -1159,6 +1263,25 @@ def apply_keypoint_preprocessing_pipeline(
             processed["confidence_sequence"] = [c.copy() for c in conf_seq]
     else:
         processed["confidence_sequence"] = [c.copy() for c in conf_seq]
+
+    if "savgol" in techniques:
+        processed["final_keypoints"] = PosePreprocessor.temporal_smooth_savgol_sequence(
+            processed["final_keypoints"],
+            window_length=int(savgol_window_length),
+            polyorder=int(savgol_polyorder),
+        )
+        processed["techniques_applied"]["temporal_smooth"] = (
+            f"savgol-wl{savgol_window_length}-poly{savgol_polyorder}"
+        )
+    elif "kalman" in techniques:
+        processed["final_keypoints"] = PosePreprocessor.temporal_smooth_kalman_sequence(
+            processed["final_keypoints"],
+            process_noise=float(kalman_process_noise),
+            measurement_noise=float(kalman_measurement_noise),
+        )
+        processed["techniques_applied"]["temporal_smooth"] = (
+            f"kalman-q{kalman_process_noise}-r{kalman_measurement_noise}"
+        )
 
     kp_array = np.array([k for k in processed["final_keypoints"] if k is not None])
     if len(kp_array) > 0:

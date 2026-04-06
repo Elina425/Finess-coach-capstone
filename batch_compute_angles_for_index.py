@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 """
 For each row in exercise_training_index.csv with an existing short_clips video file,
-run MediaPipe → pixel keypoints → joint angles → save results/exercise_angles/{stem}_biomechanics.npz
+run MediaPipe → (optional) keypoint preprocessing → joint angles → save results/exercise_angles/{stem}_biomechanics.npz
+
+**Preprocessing (default on)** matches capstone step 3 / ``apply_keypoint_preprocessing_pipeline``:
+torso-based normalization (reduces camera distance / scale), spatial + temporal imputation for
+low-confidence joints, and FPS resampling for consistent timing across clips — aligned with the
+spirit of joint reliability and temporal consistency discussed in Jiang et al. (MM'22, D-MAE)
+for robust skeletal sequences (see also ``pose_estimation_core.apply_keypoint_preprocessing_pipeline``).
 
 Use --max-videos to cap work for development.
 """
@@ -12,26 +18,103 @@ import argparse
 import csv
 import sys
 from pathlib import Path
+from typing import List, Optional
 
 import numpy as np
 
 from biomechanical_features import compute_mixed_sequence_features, compute_sequence_angles
-from pose_estimation_core import MediaPipeDetector, VideoProcessor
+from pose_estimation_core import (
+    MediaPipeDetector,
+    VideoProcessor,
+    apply_keypoint_preprocessing_pipeline,
+)
 
 
-def angles_from_video(video_path: Path, max_frames: int | None) -> np.ndarray | None:
+def angles_from_video(
+    video_path: Path,
+    max_frames: int | None,
+    *,
+    preprocess: bool = True,
+    preprocessing_techniques: Optional[List[str]] = None,
+    source_fps: Optional[float] = None,
+    target_fps: float = 30.0,
+    savgol_window_length: int = 7,
+    savgol_polyorder: int = 2,
+    kalman_process_noise: float = 1e-4,
+    kalman_measurement_noise: float = 1e-2,
+) -> np.ndarray | None:
+    out = angles_and_keypoints_from_video(
+        video_path,
+        max_frames,
+        preprocess=preprocess,
+        preprocessing_techniques=preprocessing_techniques,
+        source_fps=source_fps,
+        target_fps=target_fps,
+        savgol_window_length=savgol_window_length,
+        savgol_polyorder=savgol_polyorder,
+        kalman_process_noise=kalman_process_noise,
+        kalman_measurement_noise=kalman_measurement_noise,
+    )
+    return None if out is None else out[0]
+
+
+def angles_and_keypoints_from_video(
+    video_path: Path,
+    max_frames: int | None,
+    *,
+    preprocess: bool = True,
+    preprocessing_techniques: Optional[List[str]] = None,
+    source_fps: Optional[float] = None,
+    target_fps: float = 30.0,
+    savgol_window_length: int = 7,
+    savgol_polyorder: int = 2,
+    kalman_process_noise: float = 1e-4,
+    kalman_measurement_noise: float = 1e-2,
+) -> tuple[np.ndarray, np.ndarray] | None:
+    """
+    One MediaPipe pass → (angles (T,8), keypoints (T,17,2)).
+
+    With ``preprocess=True`` (default), runs normalization + imputation + FPS sync before angles
+    (same order as ``apply_keypoint_preprocessing_pipeline``). Keypoints are then torso-normalized
+    coordinates suitable for ST-GCN / saved NPZs. With ``preprocess=False``, returns raw pixel xy.
+    """
     det = MediaPipeDetector()
     if not getattr(det, "available", True):
         print("MediaPipe unavailable", file=sys.stderr)
         return None
     vp = VideoProcessor(str(video_path))
     pose_results = vp.process_with_detector(det, max_frames=max_frames)
+    measured_fps = float(vp.fps) if vp.fps and vp.fps > 1e-3 else 30.0
     vp.close()
     if not pose_results:
         return None
     arr = np.stack([r.keypoints for r in pose_results], axis=0)
-    angles, _ = compute_sequence_angles(arr)
-    return angles
+
+    if not preprocess:
+        angles, _ = compute_sequence_angles(arr)
+        return angles.astype(np.float32), arr.astype(np.float32)
+
+    kp_seq = [arr[i].astype(np.float32).copy() for i in range(arr.shape[0])]
+    conf_seq = [np.asarray(r.confidence, dtype=np.float32).copy() for r in pose_results]
+    techniques = preprocessing_techniques
+    if techniques is None:
+        techniques = ["normalization", "imputation", "fps_sync"]
+    src = float(source_fps) if source_fps is not None and source_fps > 1e-6 else measured_fps
+    processed = apply_keypoint_preprocessing_pipeline(
+        kp_seq,
+        conf_seq,
+        preprocessing_techniques=list(techniques),
+        target_fps=float(target_fps),
+        source_fps=src,
+        original_frames=len(kp_seq),
+        savgol_window_length=int(savgol_window_length),
+        savgol_polyorder=int(savgol_polyorder),
+        kalman_process_noise=float(kalman_process_noise),
+        kalman_measurement_noise=float(kalman_measurement_noise),
+    )
+    fk = np.stack(processed["final_keypoints"], axis=0)
+    angles, _ = compute_sequence_angles(fk)
+    return angles.astype(np.float32), fk.astype(np.float32)
 
 
 def mixed_features_from_video(video_path: Path, max_frames: int | None) -> np.ndarray | None:

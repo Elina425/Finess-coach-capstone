@@ -1,0 +1,3 @@
+# One URL or ytsearch query per line. Lines starting with # are ignored.
+# Example:
+# https://www.youtube.com/watch?v=dQw4w9WgXcQ

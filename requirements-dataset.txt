@@ -1,0 +1,5 @@
+# Optional tooling: pip install -r requirements-dataset.txt
+youtube-dl>=2021.12.17
+
+# Kaggle: riccardoriccio/real-time-exercise-recognition-dataset (see kaggle_exercise_recognition_pipeline.py --riccio)
+kagglehub>=0.2

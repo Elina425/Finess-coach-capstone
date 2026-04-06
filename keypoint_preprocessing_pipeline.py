@@ -9,6 +9,8 @@ logic lives in ``pose_estimation_core.apply_keypoint_preprocessing_pipeline`` fo
 2. **Skeleton-based normalization** — scale by torso length, center on hips (reduces camera distance).
 3. **Temporal imputation** — linear interpolation along time for flickering joints.
 4. **FPS resampling** — uniform timeline at `--target-fps` (default 30 Hz) using measured video FPS.
+5. **Temporal smoothing** (optional): `--savgol` (Savitzky–Golay, preserves peaks) or `--kalman`
+   (1D Kalman per joint); pick one.
 
 Optional: `--dwt` adds wavelet-based normalization (requires PyWavelets).
 Optional: `--bone-proportion` applies BioPose-inspired limb/torso proportion scaling (arXiv:2501.07800).
@@ -38,6 +40,7 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Any
 
 from pose_estimation_core import MediaPipeDetector
 from qevd_dataset_integration import DatasetPreprocessor, QEVDDatasetLoader
@@ -51,6 +54,7 @@ def _process_short_clip_stems(
     target_fps: float,
     dataset_root: str,
     short_clips_dir: str | None = None,
+    **apply_pipeline_kwargs: Any,
 ) -> dict:
     """Run MediaPipe + preprocessing on each stem’s resolved short-clip ``.mp4`` path."""
     from build_exercise_training_index import resolve_short_clip_mp4_for_stem
@@ -68,6 +72,7 @@ def _process_short_clip_stems(
             det,
             preprocessing_techniques=techniques,
             target_fps=target_fps,
+            **apply_pipeline_kwargs,
         )
         if r:
             out[stem] = r
@@ -140,12 +145,30 @@ def main() -> int:
         help="Spatial imputation via skeleton graph Laplacian (L=D−A), harmonic relaxation (arXiv:2204.10312)",
     )
     p.add_argument(
+        "--savgol",
+        action="store_true",
+        help="Savitzky–Golay temporal smoothing (after FPS sync; preserves motion peaks)",
+    )
+    p.add_argument(
+        "--kalman",
+        action="store_true",
+        help="Kalman temporal smoothing (use one of --savgol / --kalman)",
+    )
+    p.add_argument("--savgol-window", type=int, default=7, help="SG window length (odd, capped by T)")
+    p.add_argument("--savgol-poly", type=int, default=2, help="SG polynomial order")
+    p.add_argument("--kalman-q", type=float, default=1e-4, help="Kalman process noise")
+    p.add_argument("--kalman-r", type=float, default=1e-2, help="Kalman measurement noise")
+    p.add_argument(
         "--biomechanics",
         action="store_true",
         help="After saving keypoints, compute joint-angle features (*_biomechanics.npz)",
     )
 
     args = p.parse_args()
+
+    if args.savgol and args.kalman:
+        print("Use only one of --savgol or --kalman", file=sys.stderr)
+        return 1
 
     techniques = ["normalization", "imputation", "fps_sync"]
     if args.no_fps_sync:
@@ -160,8 +183,19 @@ def main() -> int:
             techniques.insert(0, "bone_proportion")
     if args.laplacian_spatial:
         techniques.append("laplacian_spatial")
+    if args.savgol:
+        techniques.append("savgol")
+    elif args.kalman:
+        techniques.append("kalman")
     if args.dwt:
         techniques.append("dwt")
+
+    pl_kw = dict(
+        savgol_window_length=int(args.savgol_window),
+        savgol_polyorder=int(args.savgol_poly),
+        kalman_process_noise=float(args.kalman_q),
+        kalman_measurement_noise=float(args.kalman_r),
+    )
 
     det = MediaPipeDetector()
     if not getattr(det, "available", True):
@@ -178,6 +212,7 @@ def main() -> int:
             det,
             preprocessing_techniques=techniques,
             target_fps=args.target_fps,
+            **pl_kw,
         )
         if r:
             out[Path(args.video_path).stem] = r
@@ -227,6 +262,7 @@ def main() -> int:
             args.target_fps,
             args.dataset_root,
             short_clips_dir=args.short_clips_dir or None,
+            **pl_kw,
         )
     elif args.short_clips_only:
         ids = loader.list_short_clip_videos()
@@ -246,6 +282,7 @@ def main() -> int:
             args.target_fps,
             args.dataset_root,
             short_clips_dir=args.short_clips_dir or None,
+            **pl_kw,
         )
     else:
         if args.all_videos:
@@ -265,6 +302,7 @@ def main() -> int:
             det,
             preprocessing_techniques=techniques,
             target_fps=args.target_fps,
+            **pl_kw,
         )
 
     if not out:

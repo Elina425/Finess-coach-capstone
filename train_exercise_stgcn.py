@@ -6,9 +6,14 @@ Train an ST-GCN (spatial–temporal graph CNN) on COCO-17 keypoint sequences in 
 
 Uses normalized skeleton graph convolution + temporal conv (see exercise_stgcn_model.py).
 
-Example (Kaggle NPZs from kaggle_exercise_recognition_pipeline.py):
+Example (Kaggle CSV pipeline NPZs):
   ./venv/bin/python train_exercise_stgcn.py \\
     --kaggle-keypoints-dir results/kaggle_exercise_recognition --standardize --eval-test
+
+Riccio video dataset (needs *_keypoints.npz from riccio_kaggle_video_pipeline — same stem as BiLSTM):
+  ./venv/bin/python train_exercise_stgcn.py --standardize --eval-test \\
+    --kaggle-keypoints-dir results/riccio_realtime_exercise_recognition \\
+    --kaggle-stem riccio_realtime_exercise_recognition
 """
 
 from __future__ import annotations

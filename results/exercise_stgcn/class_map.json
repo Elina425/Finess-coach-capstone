@@ -1,16 +1,16 @@
 {
   "class_to_idx": {
-    "jumping_jacks": 0,
-    "pullups": 1,
-    "pushups": 2,
-    "situp": 3,
-    "squats": 4
+    "barbell biceps curl": 0,
+    "hammer curl": 1,
+    "push-up": 2,
+    "shoulder press": 3,
+    "squat": 4
   },
   "idx_to_class": {
-    "0": "jumping_jacks",
-    "1": "pullups",
-    "2": "pushups",
-    "3": "situp",
-    "4": "squats"
+    "0": "barbell biceps curl",
+    "1": "hammer curl",
+    "2": "push-up",
+    "3": "shoulder press",
+    "4": "squat"
   }
 }
