@@ -6,6 +6,7 @@ Train a BiLSTM on 30-frame windows for:
 
 Aligned with Riccio (arXiv:2411.11548): BiLSTM on sequences, optional mixed angles+coords,
 standardized features (§3.3.1), 30-frame windows. Use --preset riccio for paper Table 4 BiLSTM hyperparameters.
+Hyperparameter search (same paper-style ranges): tune_exercise_bilstm.py (Optuna TPE).
 
 Requires:
   - Index CSV from build_exercise_training_index.py or setup_local_training_data.py
@@ -21,6 +22,10 @@ Example:
     --kaggle-stem riccio_realtime_exercise_recognition
 
   ./venv/bin/python train_exercise_bilstm.py --kaggle-angles-dir results/kaggle_exercise_recognition --standardize --eval-test
+
+  # Optuna search (Riccio-style ranges), then retrain best hparams:
+  ./venv/bin/python tune_exercise_bilstm.py --standardize --n-trials 30 --tune-epochs 15 \\
+    --kaggle-angles-dir results/riccio_realtime_exercise_recognition --kaggle-stem riccio_realtime_exercise_recognition
 """
 
 from __future__ import annotations
@@ -28,8 +33,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, List, Optional
 
 import torch
 import torch.nn as nn
@@ -42,6 +48,290 @@ from exercise_bilstm_dataset import (
     load_index_rows,
 )
 from exercise_bilstm_model import ExerciseBiLSTM
+
+
+@dataclass
+class BiLSTMTrainContext:
+    """Datasets and metadata after index/Kaggle resolution (before model / loaders)."""
+
+    train_ds: ExerciseAngleWindowDataset
+    val_ds: ExerciseAngleWindowDataset
+    test_ds: Optional[ExerciseAngleWindowDataset]
+    classes: List[str]
+    class_to_idx: Dict[str, int]
+    idx_to_class: Dict[int, str]
+    feat_dim: int
+    scale_mean: Optional[Any]
+    scale_std: Optional[Any]
+    feature_mode: str
+    kaggle_dir: str
+    window: int
+    stride: int
+    rows: List[dict]
+
+
+def _maybe_report_prune(trial: Any, step: int, value: float) -> None:
+    if trial is None:
+        return
+    try:
+        from optuna.exceptions import TrialPruned
+
+        trial.report(float(value), step)
+        if trial.should_prune():
+            raise TrialPruned()
+    except ImportError:
+        pass
+
+
+def build_bilstm_train_context(args: argparse.Namespace) -> Optional[BiLSTMTrainContext]:
+    """
+    Build train/val/(test) datasets from --index-csv or --kaggle-angles-dir.
+    Returns None if training set is empty or paths invalid.
+    """
+    kaggle_dir = (args.kaggle_angles_dir or "").strip()
+    scale_mean = scale_std = None
+    test_ds = None
+    rows: List[dict] = []
+
+    if kaggle_dir:
+        kpath = Path(kaggle_dir)
+        if not kpath.is_dir():
+            print(f"Not a directory: {kpath}", file=sys.stderr)
+            return None
+        if args.feature_mode != "angles":
+            print(
+                "Kaggle mode uses precomputed biomechanics angles only; using feature-mode=angles.",
+                file=sys.stderr,
+            )
+            args.feature_mode = "angles"
+        try:
+            train_ds, val_ds, test_ds, class_to_idx, idx_to_class, scale_mean, scale_std = (
+                build_kaggle_angle_datasets(
+                    kpath,
+                    stem=args.kaggle_stem,
+                    window=args.window,
+                    stride=args.stride,
+                    test_ratio=args.kaggle_test_ratio,
+                    val_ratio=args.kaggle_val_ratio,
+                    seed=args.kaggle_seed,
+                    standardize=args.standardize,
+                )
+            )
+        except (FileNotFoundError, ValueError, RuntimeError) as e:
+            print(str(e), file=sys.stderr)
+            return None
+        classes = [idx_to_class[i] for i in range(len(class_to_idx))]
+    else:
+        index_path = Path(args.index_csv)
+        angles_dir = Path(args.angles_dir)
+        if not index_path.is_file():
+            print(f"Missing {index_path} — run build_exercise_training_index.py first", file=sys.stderr)
+            return None
+
+        rows = load_index_rows(index_path)
+        train_rows = [r for r in rows if r.get("split") == "train"]
+        val_rows = [r for r in rows if r.get("split") == "val"]
+        if not val_rows:
+            val_rows = [r for r in rows if r.get("split") == "test"]
+        if not train_rows:
+            print("No train split in index", file=sys.stderr)
+            return None
+
+        classes = sorted({r["exercise_class"] for r in train_rows})
+        class_to_idx = {c: i for i, c in enumerate(classes)}
+        idx_to_class = {i: c for c, i in class_to_idx.items()}
+
+        kp_dir = Path(args.keypoints_dir) if args.feature_mode in ("mixed", "coords") else None
+
+        train_ds = ExerciseAngleWindowDataset(
+            index_path,
+            angles_dir,
+            class_to_idx,
+            split="train",
+            window=args.window,
+            stride=args.stride,
+            feature_mode=args.feature_mode,
+            keypoints_dir=kp_dir,
+        )
+        val_split = "val" if any(r.get("split") == "val" for r in rows) else (
+            "test" if any(r.get("split") == "test" for r in rows) else "train"
+        )
+        val_ds = ExerciseAngleWindowDataset(
+            index_path,
+            angles_dir,
+            class_to_idx,
+            split=val_split,
+            window=args.window,
+            stride=args.stride,
+            feature_mode=args.feature_mode,
+            keypoints_dir=kp_dir,
+        )
+
+        if args.standardize and len(train_ds) > 0:
+            scale_mean, scale_std = fit_standardizer_from_dataset(train_ds)
+            train_ds.apply_standardizer(scale_mean, scale_std)
+            val_ds.apply_standardizer(scale_mean, scale_std)
+
+    if len(train_ds) == 0:
+        if not kaggle_dir:
+            angles_dir = Path(args.angles_dir)
+            kp_dir = Path(args.keypoints_dir) if args.feature_mode in ("mixed", "coords") else None
+            _diagnose_empty_train(rows, "train", args.feature_mode, angles_dir, kp_dir)
+            hint = (
+                "For feature-mode=angles: *_biomechanics.npz under --angles-dir.\n"
+                "For feature-mode=mixed|coords: *_keypoints.npz under --keypoints-dir (same video_stem as index).\n"
+                "Short-clip indices (00000000…) need matching NPZ per stem, or use a long_range index with 0000,0001,…\n"
+                "Run: batch_compute_angles_for_index.py (with videos) OR setup_local_training_data.py"
+            )
+            print(f"No training windows — {hint}", file=sys.stderr)
+        else:
+            print(
+                "No training windows from Kaggle NPZs — check angles length, window/stride, and label alignment.",
+                file=sys.stderr,
+            )
+        return None
+
+    feat_dim = train_ds.samples[0][0].shape[1] if train_ds.samples else 8
+    return BiLSTMTrainContext(
+        train_ds=train_ds,
+        val_ds=val_ds,
+        test_ds=test_ds,
+        classes=classes,
+        class_to_idx=class_to_idx,
+        idx_to_class=idx_to_class,
+        feat_dim=feat_dim,
+        scale_mean=scale_mean,
+        scale_std=scale_std,
+        feature_mode=args.feature_mode,
+        kaggle_dir=kaggle_dir,
+        window=args.window,
+        stride=args.stride,
+        rows=rows,
+    )
+
+
+def run_bilstm_training(
+    ctx: BiLSTMTrainContext,
+    *,
+    hidden: int,
+    layers: int,
+    dropout: float,
+    lr: float,
+    batch_size: int,
+    weight_decay: float,
+    epochs: int,
+    cls_weight: float,
+    reg_weight: float,
+    device: torch.device,
+    out_dir: Optional[Path],
+    save_checkpoint: bool,
+    verbose: bool,
+    trial: Any = None,
+) -> Dict[str, Any]:
+    """
+    Train BiLSTM; maximize validation accuracy for checkpointing.
+    If ``trial`` is set (Optuna), reports val acc per epoch and may prune.
+    """
+    train_loader = DataLoader(
+        ctx.train_ds, batch_size=batch_size, shuffle=True, drop_last=False
+    )
+    val_loader = (
+        DataLoader(ctx.val_ds, batch_size=batch_size, shuffle=False)
+        if len(ctx.val_ds) > 0
+        else None
+    )
+    test_loader = (
+        DataLoader(ctx.test_ds, batch_size=batch_size, shuffle=False)
+        if ctx.test_ds is not None and len(ctx.test_ds) > 0
+        else None
+    )
+
+    model = ExerciseBiLSTM(
+        input_dim=ctx.feat_dim,
+        num_classes=len(ctx.classes),
+        hidden=hidden,
+        num_layers=layers,
+        dropout=dropout,
+    ).to(device)
+    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+    best_acc = 0.0
+    best_rmse = 0.0
+    best_state: Optional[Dict[str, Any]] = None
+    last_tr_loss = 0.0
+
+    for epoch in range(1, epochs + 1):
+        last_tr_loss = train_one_epoch(
+            model,
+            train_loader,
+            opt,
+            cls_weight,
+            reg_weight,
+            device,
+        )
+        if val_loader is not None:
+            va, vrmse = evaluate(model, val_loader, device, len(ctx.classes))
+        else:
+            va, vrmse = 0.0, 0.0
+
+        _maybe_report_prune(trial, epoch - 1, va)
+
+        should_save = (val_loader is not None and va > best_acc) or (
+            val_loader is None and epoch == epochs
+        )
+        if should_save:
+            if val_loader is not None:
+                best_acc = va
+                best_rmse = vrmse
+            if save_checkpoint:
+                best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+        if verbose:
+            print(
+                f"epoch {epoch:03d}  train_loss={last_tr_loss:.4f}  "
+                f"val_acc={va:.4f}  val_quality_rmse={vrmse:.4f}"
+            )
+
+    if save_checkpoint and best_state is None and val_loader is None:
+        best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+        best_acc = 0.0
+        best_rmse = 0.0
+
+    ckpt_payload: Optional[Dict[str, Any]] = None
+    if save_checkpoint and out_dir is not None and best_state is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ckpt_payload = {
+            "model": best_state,
+            "window": ctx.window,
+            "stride": ctx.stride,
+            "feat_dim": ctx.feat_dim,
+            "num_classes": len(ctx.classes),
+            "classes": ctx.classes,
+            "feature_mode": ctx.feature_mode,
+            "scale_mean": ctx.scale_mean,
+            "scale_std": ctx.scale_std,
+            "hidden": hidden,
+            "layers": layers,
+            "dropout": dropout,
+            "lr": lr,
+            "batch_size": batch_size,
+            "weight_decay": weight_decay,
+        }
+        with open(out_dir / "class_map.json", "w") as f:
+            json.dump(
+                {"class_to_idx": ctx.class_to_idx, "idx_to_class": ctx.idx_to_class},
+                f,
+                indent=2,
+            )
+        torch.save(ckpt_payload, out_dir / "exercise_bilstm_best.pt")
+
+    return {
+        "best_val_acc": best_acc,
+        "best_val_rmse": best_rmse,
+        "last_train_loss": last_tr_loss,
+        "test_loader": test_loader,
+        "model": model,
+        "checkpoint": ckpt_payload,
+    }
 
 
 def _diagnose_empty_train(
@@ -150,8 +440,8 @@ def evaluate(
     return acc, rmse
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Train BiLSTM exercise classifier + quality regressor")
+def add_bilstm_train_args(ap: argparse.ArgumentParser) -> None:
+    """Data paths, Kaggle options, and model hyperparameters (shared with tune_exercise_bilstm.py)."""
     ap.add_argument("--index-csv", default="./results/exercise_training_index.csv")
     ap.add_argument("--angles-dir", default="./results/exercise_angles")
     ap.add_argument(
@@ -177,7 +467,6 @@ def main() -> int:
         help="riccio: Table 4 BiLSTM — units 73, dropout ~0.22, lr 4e-4, batch 54",
     )
     ap.add_argument("--output-dir", default="./results/exercise_bilstm")
-    ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--hidden", type=int, default=128)
@@ -187,6 +476,12 @@ def main() -> int:
     ap.add_argument("--stride", type=int, default=15)
     ap.add_argument("--cls-weight", type=float, default=1.0)
     ap.add_argument("--reg-weight", type=float, default=0.5)
+    ap.add_argument(
+        "--weight-decay",
+        type=float,
+        default=1e-4,
+        help="AdamW weight decay (Riccio-style tuning often searches log-uniform around 1e-4).",
+    )
     ap.add_argument("--cpu", action="store_true")
     ap.add_argument(
         "--kaggle-angles-dir",
@@ -202,6 +497,12 @@ def main() -> int:
     ap.add_argument("--kaggle-test-ratio", type=float, default=0.15)
     ap.add_argument("--kaggle-val-ratio", type=float, default=0.15)
     ap.add_argument("--kaggle-seed", type=int, default=42)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Train BiLSTM exercise classifier + quality regressor")
+    add_bilstm_train_args(ap)
+    ap.add_argument("--epochs", type=int, default=30)
     ap.add_argument(
         "--eval-test",
         action="store_true",
@@ -217,182 +518,36 @@ def main() -> int:
 
     device = torch.device("cpu" if args.cpu or not torch.cuda.is_available() else "cuda")
 
-    kaggle_dir = (args.kaggle_angles_dir or "").strip()
-    scale_mean = scale_std = None
-    test_ds = None
-    rows: list = []
-
-    if kaggle_dir:
-        kpath = Path(kaggle_dir)
-        if not kpath.is_dir():
-            print(f"Not a directory: {kpath}", file=sys.stderr)
-            return 1
-        if args.feature_mode != "angles":
-            print(
-                "Kaggle mode uses precomputed biomechanics angles only; using feature-mode=angles.",
-                file=sys.stderr,
-            )
-            args.feature_mode = "angles"
-        try:
-            train_ds, val_ds, test_ds, class_to_idx, idx_to_class, scale_mean, scale_std = (
-                build_kaggle_angle_datasets(
-                    kpath,
-                    stem=args.kaggle_stem,
-                    window=args.window,
-                    stride=args.stride,
-                    test_ratio=args.kaggle_test_ratio,
-                    val_ratio=args.kaggle_val_ratio,
-                    seed=args.kaggle_seed,
-                    standardize=args.standardize,
-                )
-            )
-        except (FileNotFoundError, ValueError, RuntimeError) as e:
-            print(str(e), file=sys.stderr)
-            return 1
-        classes = [idx_to_class[i] for i in range(len(class_to_idx))]
-    else:
-        index_path = Path(args.index_csv)
-        angles_dir = Path(args.angles_dir)
-        if not index_path.is_file():
-            print(f"Missing {index_path} — run build_exercise_training_index.py first", file=sys.stderr)
-            return 1
-
-        rows = load_index_rows(index_path)
-        train_rows = [r for r in rows if r.get("split") == "train"]
-        val_rows = [r for r in rows if r.get("split") == "val"]
-        if not val_rows:
-            val_rows = [r for r in rows if r.get("split") == "test"]
-        if not train_rows:
-            print("No train split in index", file=sys.stderr)
-            return 1
-
-        classes = sorted({r["exercise_class"] for r in train_rows})
-        class_to_idx = {c: i for i, c in enumerate(classes)}
-        idx_to_class = {i: c for c, i in class_to_idx.items()}
-
-        kp_dir = Path(args.keypoints_dir) if args.feature_mode in ("mixed", "coords") else None
-
-        train_ds = ExerciseAngleWindowDataset(
-            index_path,
-            angles_dir,
-            class_to_idx,
-            split="train",
-            window=args.window,
-            stride=args.stride,
-            feature_mode=args.feature_mode,
-            keypoints_dir=kp_dir,
-        )
-        val_split = "val" if any(r.get("split") == "val" for r in rows) else (
-            "test" if any(r.get("split") == "test" for r in rows) else "train"
-        )
-        val_ds = ExerciseAngleWindowDataset(
-            index_path,
-            angles_dir,
-            class_to_idx,
-            split=val_split,
-            window=args.window,
-            stride=args.stride,
-            feature_mode=args.feature_mode,
-            keypoints_dir=kp_dir,
-        )
-
-        if args.standardize and len(train_ds) > 0:
-            scale_mean, scale_std = fit_standardizer_from_dataset(train_ds)
-            train_ds.apply_standardizer(scale_mean, scale_std)
-            val_ds.apply_standardizer(scale_mean, scale_std)
-
-    if len(train_ds) == 0:
-        if not kaggle_dir:
-            angles_dir = Path(args.angles_dir)
-            kp_dir = Path(args.keypoints_dir) if args.feature_mode in ("mixed", "coords") else None
-            _diagnose_empty_train(rows, "train", args.feature_mode, angles_dir, kp_dir)
-            hint = (
-                "For feature-mode=angles: *_biomechanics.npz under --angles-dir.\n"
-                "For feature-mode=mixed|coords: *_keypoints.npz under --keypoints-dir (same video_stem as index).\n"
-                "Short-clip indices (00000000…) need matching NPZ per stem, or use a long_range index with 0000,0001,…\n"
-                "Run: batch_compute_angles_for_index.py (with videos) OR setup_local_training_data.py"
-            )
-            print(f"No training windows — {hint}", file=sys.stderr)
-        else:
-            print(
-                "No training windows from Kaggle NPZs — check angles length, window/stride, and label alignment.",
-                file=sys.stderr,
-            )
+    ctx = build_bilstm_train_context(args)
+    if ctx is None:
         return 1
 
-    train_loader = DataLoader(
-        train_ds, batch_size=args.batch_size, shuffle=True, drop_last=False
-    )
-    val_loader = (
-        DataLoader(val_ds, batch_size=args.batch_size, shuffle=False)
-        if len(val_ds) > 0
-        else None
-    )
-    test_loader = (
-        DataLoader(test_ds, batch_size=args.batch_size, shuffle=False)
-        if test_ds is not None and len(test_ds) > 0
-        else None
-    )
-
-    feat_dim = train_ds.samples[0][0].shape[1] if train_ds.samples else 8
-    model = ExerciseBiLSTM(
-        input_dim=feat_dim,
-        num_classes=len(classes),
-        hidden=args.hidden,
-        num_layers=args.layers,
-        dropout=args.dropout,
-    ).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
-
     out_dir = Path(args.output_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    with open(out_dir / "class_map.json", "w") as f:
-        json.dump({"class_to_idx": class_to_idx, "idx_to_class": idx_to_class}, f, indent=2)
-
-    best_acc = 0.0
-    for epoch in range(1, args.epochs + 1):
-        tr_loss = train_one_epoch(
-            model,
-            train_loader,
-            opt,
-            args.cls_weight,
-            args.reg_weight,
-            device,
-        )
-        if val_loader is not None:
-            va, vrmse = evaluate(model, val_loader, device, len(classes))
-        else:
-            va, vrmse = 0.0, 0.0
-        should_save = (val_loader is not None and va > best_acc) or (
-            val_loader is None and epoch == args.epochs
-        )
-        if should_save:
-            if val_loader is not None:
-                best_acc = va
-            torch.save(
-                {
-                    "model": model.state_dict(),
-                    "window": args.window,
-                    "stride": args.stride,
-                    "feat_dim": feat_dim,
-                    "num_classes": len(classes),
-                    "classes": classes,
-                    "feature_mode": args.feature_mode,
-                    "scale_mean": scale_mean,
-                    "scale_std": scale_std,
-                    "hidden": args.hidden,
-                    "layers": args.layers,
-                    "dropout": args.dropout,
-                },
-                out_dir / "exercise_bilstm_best.pt",
-            )
-        print(
-            f"epoch {epoch:03d}  train_loss={tr_loss:.4f}  "
-            f"val_acc={va:.4f}  val_quality_rmse={vrmse:.4f}"
-        )
-
+    res = run_bilstm_training(
+        ctx,
+        hidden=args.hidden,
+        layers=args.layers,
+        dropout=args.dropout,
+        lr=args.lr,
+        batch_size=args.batch_size,
+        weight_decay=args.weight_decay,
+        epochs=args.epochs,
+        cls_weight=args.cls_weight,
+        reg_weight=args.reg_weight,
+        device=device,
+        out_dir=out_dir,
+        save_checkpoint=True,
+        verbose=True,
+        trial=None,
+    )
+    best_acc = res["best_val_acc"]
     ckpt_path = out_dir / "exercise_bilstm_best.pt"
     print(f"Best val acc ≈ {best_acc:.4f}; checkpoint: {ckpt_path}")
+
+    kaggle_dir = ctx.kaggle_dir
+    test_loader = res.get("test_loader")
+    model = res["model"]
+    classes = ctx.classes
 
     if args.eval_test and kaggle_dir and test_loader is not None and ckpt_path.is_file():
         try:
