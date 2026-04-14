@@ -613,7 +613,7 @@
     "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/synthetic_dataset/synthetic_dataset/squat/000098.mp4",
     "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/synthetic_dataset/synthetic_dataset/squat/000099.mp4"
   ],
-  "total_frames": 199410,
+  "total_frames": 237241,
   "angle_dim": 8,
   "biomechanics_npz": "riccio_realtime_exercise_recognition_biomechanics.npz",
   "labels_npz": "riccio_realtime_exercise_recognition_labels.npz",
@@ -624,5 +624,14 @@
     "push-up",
     "shoulder press",
     "squat"
-  ]
+  ],
+  "num_distinct_videos": 606,
+  "labels_include_video_id": true,
+  "preprocessing": [
+    "normalization",
+    "imputation",
+    "fps_sync"
+  ],
+  "target_fps": 30.0,
+  "source_fps_override": null
 }

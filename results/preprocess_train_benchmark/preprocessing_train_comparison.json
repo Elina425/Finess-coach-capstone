@@ -1,0 +1,178 @@
+{
+  "generated_utc": "2026-04-12T19:29:15.297277+00:00",
+  "repo_root": "/Users/emelkonyan/Finess-coach-capstone-1",
+  "train": {
+    "preset": "riccio",
+    "architecture": "cnn_attn",
+    "classification_only": true,
+    "standardize": true,
+    "eval_test": true,
+    "epochs": 30,
+    "kaggle_seed": 42,
+    "kaggle_stem": "riccio_realtime_exercise_recognition",
+    "extra_args": []
+  },
+  "default": {
+    "kaggle_angles_dir": "/Users/emelkonyan/Finess-coach-capstone-1/results/run_default",
+    "output_dir": "/Users/emelkonyan/Finess-coach-capstone-1/results/preprocess_train_benchmark/default",
+    "test_metrics": {
+      "split": "test",
+      "class_names": [
+        "barbell biceps curl",
+        "hammer curl",
+        "push-up",
+        "shoulder press",
+        "squat"
+      ],
+      "accuracy": 0.8575355016032982,
+      "f1_macro": 0.6992930394606967,
+      "f1_weighted": 0.852930179985518,
+      "recall_macro": 0.7022008764161644,
+      "precision_macro": 0.7162185302347814,
+      "f1_per_class": {
+        "barbell biceps curl": 0.8656387665198237,
+        "hammer curl": 0.04,
+        "push-up": 0.7932739861523245,
+        "shoulder press": 0.9321039396479464,
+        "squat": 0.8654485049833887
+      },
+      "recall_per_class": {
+        "barbell biceps curl": 0.8020408163265306,
+        "hammer curl": 0.023809523809523808,
+        "push-up": 0.8911111111111111,
+        "shoulder press": 0.9328859060402684,
+        "squat": 0.8611570247933884
+      },
+      "precision_per_class": {
+        "barbell biceps curl": 0.9401913875598086,
+        "hammer curl": 0.125,
+        "push-up": 0.714795008912656,
+        "shoulder press": 0.931323283082077,
+        "squat": 0.8697829716193656
+      },
+      "confusion_matrix": [
+        [
+          393,
+          7,
+          61,
+          7,
+          22
+        ],
+        [
+          11,
+          1,
+          2,
+          0,
+          28
+        ],
+        [
+          1,
+          0,
+          401,
+          23,
+          25
+        ],
+        [
+          3,
+          0,
+          34,
+          556,
+          3
+        ],
+        [
+          10,
+          0,
+          63,
+          11,
+          521
+        ]
+      ],
+      "confusion_matrix_note": "rows=true class, columns=predicted class"
+    }
+  },
+  "rich": {
+    "kaggle_angles_dir": "/Users/emelkonyan/Finess-coach-capstone-1/results/run_rich",
+    "output_dir": "/Users/emelkonyan/Finess-coach-capstone-1/results/preprocess_train_benchmark/rich",
+    "test_metrics": {
+      "split": "test",
+      "class_names": [
+        "barbell biceps curl",
+        "hammer curl",
+        "push-up",
+        "shoulder press",
+        "squat"
+      ],
+      "accuracy": 0.7627118644067796,
+      "f1_macro": 0.6159235462156178,
+      "f1_weighted": 0.7592412664295308,
+      "recall_macro": 0.6164908883885613,
+      "precision_macro": 0.6196466927858921,
+      "f1_per_class": {
+        "barbell biceps curl": 0.7569367369589345,
+        "hammer curl": 0.0,
+        "push-up": 0.7164835164835165,
+        "shoulder press": 0.8491525423728814,
+        "squat": 0.7570449352627571
+      },
+      "recall_per_class": {
+        "barbell biceps curl": 0.6959183673469388,
+        "hammer curl": 0.0,
+        "push-up": 0.7244444444444444,
+        "shoulder press": 0.8406040268456376,
+        "squat": 0.8214876033057851
+      },
+      "precision_per_class": {
+        "barbell biceps curl": 0.829683698296837,
+        "hammer curl": 0.0,
+        "push-up": 0.7086956521739131,
+        "shoulder press": 0.8578767123287672,
+        "squat": 0.7019774011299436
+      },
+      "confusion_matrix": [
+        [
+          341,
+          8,
+          57,
+          14,
+          70
+        ],
+        [
+          11,
+          0,
+          14,
+          0,
+          17
+        ],
+        [
+          7,
+          3,
+          326,
+          48,
+          66
+        ],
+        [
+          4,
+          6,
+          27,
+          501,
+          58
+        ],
+        [
+          48,
+          3,
+          36,
+          21,
+          497
+        ]
+      ],
+      "confusion_matrix_note": "rows=true class, columns=predicted class"
+    }
+  },
+  "delta_rich_minus_default": {
+    "accuracy": -0.09482363719651854,
+    "f1_macro": -0.08336949324507881,
+    "f1_weighted": -0.09368891355598719,
+    "recall_macro": -0.0857099880276031,
+    "precision_macro": -0.09657183744888931
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "split": "test",
+  "class_names": [
+    "barbell biceps curl",
+    "hammer curl",
+    "push-up",
+    "shoulder press",
+    "squat"
+  ],
+  "accuracy": 0.8575355016032982,
+  "f1_macro": 0.6992930394606967,
+  "f1_weighted": 0.852930179985518,
+  "recall_macro": 0.7022008764161644,
+  "precision_macro": 0.7162185302347814,
+  "f1_per_class": {
+    "barbell biceps curl": 0.8656387665198237,
+    "hammer curl": 0.04,
+    "push-up": 0.7932739861523245,
+    "shoulder press": 0.9321039396479464,
+    "squat": 0.8654485049833887
+  },
+  "recall_per_class": {
+    "barbell biceps curl": 0.8020408163265306,
+    "hammer curl": 0.023809523809523808,
+    "push-up": 0.8911111111111111,
+    "shoulder press": 0.9328859060402684,
+    "squat": 0.8611570247933884
+  },
+  "precision_per_class": {
+    "barbell biceps curl": 0.9401913875598086,
+    "hammer curl": 0.125,
+    "push-up": 0.714795008912656,
+    "shoulder press": 0.931323283082077,
+    "squat": 0.8697829716193656
+  },
+  "confusion_matrix": [
+    [
+      393,
+      7,
+      61,
+      7,
+      22
+    ],
+    [
+      11,
+      1,
+      2,
+      0,
+      28
+    ],
+    [
+      1,
+      0,
+      401,
+      23,
+      25
+    ],
+    [
+      3,
+      0,
+      34,
+      556,
+      3
+    ],
+    [
+      10,
+      0,
+      63,
+      11,
+      521
+    ]
+  ],
+  "confusion_matrix_note": "rows=true class, columns=predicted class"
+}

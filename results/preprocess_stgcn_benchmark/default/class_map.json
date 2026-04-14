@@ -1,0 +1,16 @@
+{
+  "class_to_idx": {
+    "barbell biceps curl": 0,
+    "hammer curl": 1,
+    "push-up": 2,
+    "shoulder press": 3,
+    "squat": 4
+  },
+  "idx_to_class": {
+    "0": "barbell biceps curl",
+    "1": "hammer curl",
+    "2": "push-up",
+    "3": "shoulder press",
+    "4": "squat"
+  }
+}

@@ -1,0 +1,4195 @@
+{
+    "records": [
+        {
+            "original_actor": "0912-Huiwen",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/ThEnUZ/ego_l",
+                    "num_frames": 7973
+                },
+                "ego_r": {
+                    "path": "frames_open/ThEnUZ/ego_r",
+                    "num_frames": 7981
+                },
+                "ego_m": {
+                    "path": "frames_open/ThEnUZ/ego_m",
+                    "num_frames": 7982
+                },
+                "exo_m": {
+                    "path": "frames_open/ThEnUZ/exo_m",
+                    "num_frames": 7980
+                },
+                "exo_l": {
+                    "path": "frames_open/ThEnUZ/exo_l",
+                    "num_frames": 7980
+                },
+                "exo_r": {
+                    "path": "frames_open/ThEnUZ/exo_r",
+                    "num_frames": 7980
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        16,
+                        1000
+                    ],
+                    [
+                        2144,
+                        4118
+                    ],
+                    [
+                        5251,
+                        7691
+                    ]
+                ]
+            },
+            "num_actions": 12
+        },
+        {
+            "original_actor": "0912-Shenghao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/xYkvB0/ego_l",
+                    "num_frames": 15060
+                },
+                "ego_r": {
+                    "path": "frames_open/xYkvB0/ego_r",
+                    "num_frames": 15060
+                },
+                "ego_m": {
+                    "path": "frames_open/xYkvB0/ego_m",
+                    "num_frames": 15062
+                },
+                "exo_m": {
+                    "path": "frames_open/xYkvB0/exo_m",
+                    "num_frames": 15060
+                },
+                "exo_l": {
+                    "path": "frames_open/xYkvB0/exo_l",
+                    "num_frames": 15061
+                },
+                "exo_r": {
+                    "path": "frames_open/xYkvB0/exo_r",
+                    "num_frames": 15060
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        22,
+                        2393
+                    ],
+                    [
+                        5896,
+                        8110
+                    ],
+                    [
+                        12511,
+                        14883
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0912-Yankang",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/3HqdZ6/ego_l",
+                    "num_frames": 11761
+                },
+                "ego_r": {
+                    "path": "frames_open/3HqdZ6/ego_r",
+                    "num_frames": 11762
+                },
+                "ego_m": {
+                    "path": "frames_open/3HqdZ6/ego_m",
+                    "num_frames": 11762
+                },
+                "exo_m": {
+                    "path": "frames_open/3HqdZ6/exo_m",
+                    "num_frames": 11760
+                },
+                "exo_l": {
+                    "path": "frames_open/3HqdZ6/exo_l",
+                    "num_frames": 11761
+                },
+                "exo_r": {
+                    "path": "frames_open/3HqdZ6/exo_r",
+                    "num_frames": 11760
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        46,
+                        3005
+                    ],
+                    [
+                        5026,
+                        7085
+                    ],
+                    [
+                        8806,
+                        11641
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0912-Yiyang",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/CeqSkC/ego_l",
+                    "num_frames": 13235
+                },
+                "ego_r": {
+                    "path": "frames_open/CeqSkC/ego_r",
+                    "num_frames": 13233
+                },
+                "ego_m": {
+                    "path": "frames_open/CeqSkC/ego_m",
+                    "num_frames": 13233
+                },
+                "exo_m": {
+                    "path": "frames_open/CeqSkC/exo_m",
+                    "num_frames": 13232
+                },
+                "exo_l": {
+                    "path": "frames_open/CeqSkC/exo_l",
+                    "num_frames": 13234
+                },
+                "exo_r": {
+                    "path": "frames_open/CeqSkC/exo_r",
+                    "num_frames": 13235
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        59,
+                        2880
+                    ],
+                    [
+                        6278,
+                        8327
+                    ],
+                    [
+                        10980,
+                        13100
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0913-Angchi",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/dYRk2k/ego_l",
+                    "num_frames": 13080
+                },
+                "ego_r": {
+                    "path": "frames_open/dYRk2k/ego_r",
+                    "num_frames": 13080
+                },
+                "ego_m": {
+                    "path": "frames_open/dYRk2k/ego_m",
+                    "num_frames": 13082
+                },
+                "exo_m": {
+                    "path": "frames_open/dYRk2k/exo_m",
+                    "num_frames": 13080
+                },
+                "exo_l": {
+                    "path": "frames_open/dYRk2k/exo_l",
+                    "num_frames": 13073
+                },
+                "exo_r": {
+                    "path": "frames_open/dYRk2k/exo_r",
+                    "num_frames": 13080
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        37,
+                        1953
+                    ],
+                    [
+                        4795,
+                        8305
+                    ],
+                    [
+                        9556,
+                        12736
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0913-Chenyang",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/J6afU1/ego_l",
+                    "num_frames": 11310
+                },
+                "ego_r": {
+                    "path": "frames_open/J6afU1/ego_r",
+                    "num_frames": 11310
+                },
+                "ego_m": {
+                    "path": "frames_open/J6afU1/ego_m",
+                    "num_frames": 11312
+                },
+                "exo_m": {
+                    "path": "frames_open/J6afU1/exo_m",
+                    "num_frames": 11310
+                },
+                "exo_l": {
+                    "path": "frames_open/J6afU1/exo_l",
+                    "num_frames": 11303
+                },
+                "exo_r": {
+                    "path": "frames_open/J6afU1/exo_r",
+                    "num_frames": 11310
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        46,
+                        4321
+                    ],
+                    [
+                        4621,
+                        7431
+                    ],
+                    [
+                        8234,
+                        11059
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0913-Huilin",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/RHNgmh/ego_l",
+                    "num_frames": 10470
+                },
+                "ego_r": {
+                    "path": "frames_open/RHNgmh/ego_r",
+                    "num_frames": 10470
+                },
+                "ego_m": {
+                    "path": "frames_open/RHNgmh/ego_m",
+                    "num_frames": 10472
+                },
+                "exo_m": {
+                    "path": "frames_open/RHNgmh/exo_m",
+                    "num_frames": 10470
+                },
+                "exo_l": {
+                    "path": "frames_open/RHNgmh/exo_l",
+                    "num_frames": 10470
+                },
+                "exo_r": {
+                    "path": "frames_open/RHNgmh/exo_r",
+                    "num_frames": 10465
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        2731
+                    ],
+                    [
+                        3449,
+                        5865
+                    ],
+                    [
+                        6600,
+                        9618
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0913-Jiafeng",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/q6ITZM/ego_l",
+                    "num_frames": 11100
+                },
+                "ego_r": {
+                    "path": "frames_open/q6ITZM/ego_r",
+                    "num_frames": 11100
+                },
+                "ego_m": {
+                    "path": "frames_open/q6ITZM/ego_m",
+                    "num_frames": 11102
+                },
+                "exo_m": {
+                    "path": "frames_open/q6ITZM/exo_m",
+                    "num_frames": 11100
+                },
+                "exo_l": {
+                    "path": "frames_open/q6ITZM/exo_l",
+                    "num_frames": 11100
+                },
+                "exo_r": {
+                    "path": "frames_open/q6ITZM/exo_r",
+                    "num_frames": 11100
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        2380
+                    ],
+                    [
+                        5356,
+                        7340
+                    ],
+                    [
+                        8836,
+                        10950
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0913-Jianjian",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/CZYh3q/ego_l",
+                    "num_frames": 11190
+                },
+                "ego_r": {
+                    "path": "frames_open/CZYh3q/ego_r",
+                    "num_frames": 11190
+                },
+                "ego_m": {
+                    "path": "frames_open/CZYh3q/ego_m",
+                    "num_frames": 11192
+                }
+            },
+            "num_views": 3,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        20,
+                        1235
+                    ],
+                    [
+                        5147,
+                        7166
+                    ],
+                    [
+                        8790,
+                        10850
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0913-Linhui",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/IlnyLs/ego_l",
+                    "num_frames": 10771
+                },
+                "ego_r": {
+                    "path": "frames_open/IlnyLs/ego_r",
+                    "num_frames": 10771
+                },
+                "ego_m": {
+                    "path": "frames_open/IlnyLs/ego_m",
+                    "num_frames": 10772
+                },
+                "exo_m": {
+                    "path": "frames_open/IlnyLs/exo_m",
+                    "num_frames": 10770
+                },
+                "exo_l": {
+                    "path": "frames_open/IlnyLs/exo_l",
+                    "num_frames": 10770
+                },
+                "exo_r": {
+                    "path": "frames_open/IlnyLs/exo_r",
+                    "num_frames": 10770
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        37,
+                        1996
+                    ],
+                    [
+                        4265,
+                        5829
+                    ],
+                    [
+                        8101,
+                        10258
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0913-Xiaotong",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/gtJsTh/ego_l",
+                    "num_frames": 9661
+                },
+                "ego_r": {
+                    "path": "frames_open/gtJsTh/ego_r",
+                    "num_frames": 9661
+                },
+                "ego_m": {
+                    "path": "frames_open/gtJsTh/ego_m",
+                    "num_frames": 9662
+                },
+                "exo_m": {
+                    "path": "frames_open/gtJsTh/exo_m",
+                    "num_frames": 9660
+                },
+                "exo_l": {
+                    "path": "frames_open/gtJsTh/exo_l",
+                    "num_frames": 9661
+                },
+                "exo_r": {
+                    "path": "frames_open/gtJsTh/exo_r",
+                    "num_frames": 9660
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        50,
+                        3355
+                    ],
+                    [
+                        4017,
+                        6490
+                    ],
+                    [
+                        6811,
+                        9446
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0913-Yixing",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/vHqhM6/ego_l",
+                    "num_frames": 16851
+                },
+                "ego_r": {
+                    "path": "frames_open/vHqhM6/ego_r",
+                    "num_frames": 16851
+                },
+                "ego_m": {
+                    "path": "frames_open/vHqhM6/ego_m",
+                    "num_frames": 16862
+                },
+                "exo_m": {
+                    "path": "frames_open/vHqhM6/exo_m",
+                    "num_frames": 16860
+                },
+                "exo_l": {
+                    "path": "frames_open/vHqhM6/exo_l",
+                    "num_frames": 16861
+                },
+                "exo_r": {
+                    "path": "frames_open/vHqhM6/exo_r",
+                    "num_frames": 16860
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        45,
+                        3916
+                    ],
+                    [
+                        7000,
+                        10531
+                    ],
+                    [
+                        12486,
+                        16711
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0913-Zexin",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/MPm3tr/ego_l",
+                    "num_frames": 12180
+                },
+                "ego_r": {
+                    "path": "frames_open/MPm3tr/ego_r",
+                    "num_frames": 12180
+                },
+                "ego_m": {
+                    "path": "frames_open/MPm3tr/ego_m",
+                    "num_frames": 12182
+                },
+                "exo_m": {
+                    "path": "frames_open/MPm3tr/exo_m",
+                    "num_frames": 12180
+                },
+                "exo_l": {
+                    "path": "frames_open/MPm3tr/exo_l",
+                    "num_frames": 12181
+                },
+                "exo_r": {
+                    "path": "frames_open/MPm3tr/exo_r",
+                    "num_frames": 12180
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        1820
+                    ],
+                    [
+                        5545,
+                        7881
+                    ],
+                    [
+                        9136,
+                        11193
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0918-Xiaoming",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/Kpslm0/ego_l",
+                    "num_frames": 10200
+                },
+                "ego_r": {
+                    "path": "frames_open/Kpslm0/ego_r",
+                    "num_frames": 10200
+                },
+                "ego_m": {
+                    "path": "frames_open/Kpslm0/ego_m",
+                    "num_frames": 10202
+                },
+                "exo_l": {
+                    "path": "frames_open/Kpslm0/exo_l",
+                    "num_frames": 10182
+                },
+                "exo_r": {
+                    "path": "frames_open/Kpslm0/exo_r",
+                    "num_frames": 10200
+                }
+            },
+            "num_views": 5,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        24,
+                        2061
+                    ],
+                    [
+                        3060,
+                        4567
+                    ],
+                    [
+                        6624,
+                        9970
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "0918-Xiaowen",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/zT0YQO/ego_l",
+                    "num_frames": 12180
+                },
+                "ego_r": {
+                    "path": "frames_open/zT0YQO/ego_r",
+                    "num_frames": 12180
+                },
+                "ego_m": {
+                    "path": "frames_open/zT0YQO/ego_m",
+                    "num_frames": 12182
+                },
+                "exo_l": {
+                    "path": "frames_open/zT0YQO/exo_l",
+                    "num_frames": 12181
+                },
+                "exo_r": {
+                    "path": "frames_open/zT0YQO/exo_r",
+                    "num_frames": 12180
+                }
+            },
+            "num_views": 5,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        90,
+                        3180
+                    ],
+                    [
+                        4558,
+                        7986
+                    ],
+                    [
+                        9162,
+                        11470
+                    ]
+                ]
+            },
+            "num_actions": 12
+        },
+        {
+            "original_actor": "0918-Yuming",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/dgYj2S/ego_l",
+                    "num_frames": 11430
+                },
+                "ego_r": {
+                    "path": "frames_open/dgYj2S/ego_r",
+                    "num_frames": 11430
+                },
+                "ego_m": {
+                    "path": "frames_open/dgYj2S/ego_m",
+                    "num_frames": 11432
+                },
+                "exo_l": {
+                    "path": "frames_open/dgYj2S/exo_l",
+                    "num_frames": 11430
+                },
+                "exo_r": {
+                    "path": "frames_open/dgYj2S/exo_r",
+                    "num_frames": 11430
+                }
+            },
+            "num_views": 5,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        3709
+                    ],
+                    [
+                        6241,
+                        9464
+                    ],
+                    [
+                        10035,
+                        11304
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0918-Zhouyu",
+            "views": [
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "exo_m": {
+                    "path": "frames_open/Wa4cFu/exo_m",
+                    "num_frames": 13860
+                },
+                "exo_l": {
+                    "path": "frames_open/Wa4cFu/exo_l",
+                    "num_frames": 13860
+                },
+                "exo_r": {
+                    "path": "frames_open/Wa4cFu/exo_r",
+                    "num_frames": 13860
+                }
+            },
+            "num_views": 3,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        48,
+                        1595
+                    ],
+                    [
+                        5335,
+                        7651
+                    ],
+                    [
+                        11611,
+                        13644
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0919-Lingan",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/A5K3G6/ego_l",
+                    "num_frames": 20100
+                },
+                "ego_r": {
+                    "path": "frames_open/A5K3G6/ego_r",
+                    "num_frames": 20100
+                },
+                "ego_m": {
+                    "path": "frames_open/A5K3G6/ego_m",
+                    "num_frames": 20102
+                },
+                "exo_m": {
+                    "path": "frames_open/A5K3G6/exo_m",
+                    "num_frames": 20100
+                },
+                "exo_l": {
+                    "path": "frames_open/A5K3G6/exo_l",
+                    "num_frames": 20100
+                },
+                "exo_r": {
+                    "path": "frames_open/A5K3G6/exo_r",
+                    "num_frames": 20100
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "2",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        70,
+                        3006
+                    ],
+                    [
+                        14058,
+                        17027
+                    ]
+                ]
+            },
+            "num_actions": 11
+        },
+        {
+            "original_actor": "0919-Wendong",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/aNF03v/ego_l",
+                    "num_frames": 12149
+                },
+                "ego_r": {
+                    "path": "frames_open/aNF03v/ego_r",
+                    "num_frames": 12150
+                },
+                "ego_m": {
+                    "path": "frames_open/aNF03v/ego_m",
+                    "num_frames": 12152
+                }
+            },
+            "num_views": 3,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        3120
+                    ],
+                    [
+                        4959,
+                        7541
+                    ],
+                    [
+                        8294,
+                        11736
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0922-Guangwei",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_l"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/wh3jr2/ego_l",
+                    "num_frames": 9030
+                },
+                "ego_r": {
+                    "path": "frames_open/wh3jr2/ego_r",
+                    "num_frames": 9030
+                },
+                "ego_m": {
+                    "path": "frames_open/wh3jr2/ego_m",
+                    "num_frames": 9032
+                },
+                "exo_l": {
+                    "path": "frames_open/wh3jr2/exo_l",
+                    "num_frames": 9031
+                }
+            },
+            "num_views": 4,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        45,
+                        2345
+                    ],
+                    [
+                        5106,
+                        7058
+                    ],
+                    [
+                        7624,
+                        8670
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0922-Junhao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/d7RbIB/ego_l",
+                    "num_frames": 18420
+                },
+                "ego_r": {
+                    "path": "frames_open/d7RbIB/ego_r",
+                    "num_frames": 18420
+                },
+                "ego_m": {
+                    "path": "frames_open/d7RbIB/ego_m",
+                    "num_frames": 18422
+                },
+                "exo_m": {
+                    "path": "frames_open/d7RbIB/exo_m",
+                    "num_frames": 18420
+                },
+                "exo_l": {
+                    "path": "frames_open/d7RbIB/exo_l",
+                    "num_frames": 18420
+                }
+            },
+            "num_views": 5,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        45,
+                        5600
+                    ],
+                    [
+                        8236,
+                        12627
+                    ],
+                    [
+                        13380,
+                        18420
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0922-Shiyi",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/lcNQqE/ego_l",
+                    "num_frames": 17791
+                },
+                "ego_r": {
+                    "path": "frames_open/lcNQqE/ego_r",
+                    "num_frames": 17790
+                },
+                "ego_m": {
+                    "path": "frames_open/lcNQqE/ego_m",
+                    "num_frames": 17792
+                }
+            },
+            "num_views": 3,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        50,
+                        1800
+                    ],
+                    [
+                        9911,
+                        11856
+                    ],
+                    [
+                        14043,
+                        17102
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0922-Yingru",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_l"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/H4F6JM/ego_l",
+                    "num_frames": 10110
+                },
+                "ego_r": {
+                    "path": "frames_open/H4F6JM/ego_r",
+                    "num_frames": 10110
+                },
+                "ego_m": {
+                    "path": "frames_open/H4F6JM/ego_m",
+                    "num_frames": 10112
+                },
+                "exo_l": {
+                    "path": "frames_open/H4F6JM/exo_l",
+                    "num_frames": 10110
+                }
+            },
+            "num_views": 4,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        50,
+                        2114
+                    ],
+                    [
+                        4024,
+                        5397
+                    ],
+                    [
+                        7310,
+                        9890
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0922-Zhaowen",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/S71IRz/ego_l",
+                    "num_frames": 14761
+                },
+                "ego_r": {
+                    "path": "frames_open/S71IRz/ego_r",
+                    "num_frames": 14761
+                },
+                "ego_m": {
+                    "path": "frames_open/S71IRz/ego_m",
+                    "num_frames": 14762
+                },
+                "exo_m": {
+                    "path": "frames_open/S71IRz/exo_m",
+                    "num_frames": 14760
+                },
+                "exo_l": {
+                    "path": "frames_open/S71IRz/exo_l",
+                    "num_frames": 14760
+                }
+            },
+            "num_views": 5,
+            "num_sequences": "2",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        1585
+                    ],
+                    [
+                        10120,
+                        11250
+                    ]
+                ]
+            },
+            "num_actions": 9
+        },
+        {
+            "original_actor": "0922-Ziming",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/siWgNZ/ego_l",
+                    "num_frames": 13350
+                },
+                "ego_r": {
+                    "path": "frames_open/siWgNZ/ego_r",
+                    "num_frames": 13350
+                },
+                "ego_m": {
+                    "path": "frames_open/siWgNZ/ego_m",
+                    "num_frames": 13352
+                },
+                "exo_m": {
+                    "path": "frames_open/siWgNZ/exo_m",
+                    "num_frames": 13350
+                },
+                "exo_l": {
+                    "path": "frames_open/siWgNZ/exo_l",
+                    "num_frames": 13350
+                },
+                "exo_r": {
+                    "path": "frames_open/siWgNZ/exo_r",
+                    "num_frames": 13350
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        2463
+                    ],
+                    [
+                        5530,
+                        8840
+                    ],
+                    [
+                        10650,
+                        12950
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0924-Haoting",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/yT4RK3/ego_l",
+                    "num_frames": 8130
+                },
+                "ego_r": {
+                    "path": "frames_open/yT4RK3/ego_r",
+                    "num_frames": 8130
+                },
+                "ego_m": {
+                    "path": "frames_open/yT4RK3/ego_m",
+                    "num_frames": 8132
+                },
+                "exo_m": {
+                    "path": "frames_open/yT4RK3/exo_m",
+                    "num_frames": 8130
+                },
+                "exo_l": {
+                    "path": "frames_open/yT4RK3/exo_l",
+                    "num_frames": 8131
+                },
+                "exo_r": {
+                    "path": "frames_open/yT4RK3/exo_r",
+                    "num_frames": 8130
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        100,
+                        1730
+                    ],
+                    [
+                        2160,
+                        4910
+                    ],
+                    [
+                        5190,
+                        7291
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0924-Junhao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/5jtgUe/ego_l",
+                    "num_frames": 11430
+                },
+                "ego_r": {
+                    "path": "frames_open/5jtgUe/ego_r",
+                    "num_frames": 11430
+                },
+                "ego_m": {
+                    "path": "frames_open/5jtgUe/ego_m",
+                    "num_frames": 11432
+                },
+                "exo_m": {
+                    "path": "frames_open/5jtgUe/exo_m",
+                    "num_frames": 11430
+                },
+                "exo_l": {
+                    "path": "frames_open/5jtgUe/exo_l",
+                    "num_frames": 11419
+                }
+            },
+            "num_views": 5,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        20,
+                        4756
+                    ],
+                    [
+                        5161,
+                        6970
+                    ],
+                    [
+                        6991,
+                        11230
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "0924-Shiyi",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/iPH0PP/ego_l",
+                    "num_frames": 11190
+                },
+                "ego_r": {
+                    "path": "frames_open/iPH0PP/ego_r",
+                    "num_frames": 11190
+                },
+                "ego_m": {
+                    "path": "frames_open/iPH0PP/ego_m",
+                    "num_frames": 11192
+                },
+                "exo_m": {
+                    "path": "frames_open/iPH0PP/exo_m",
+                    "num_frames": 11190
+                },
+                "exo_l": {
+                    "path": "frames_open/iPH0PP/exo_l",
+                    "num_frames": 11190
+                },
+                "exo_r": {
+                    "path": "frames_open/iPH0PP/exo_r",
+                    "num_frames": 11190
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        20,
+                        2600
+                    ],
+                    [
+                        3930,
+                        6181
+                    ],
+                    [
+                        8341,
+                        10760
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "0924-Zhaowen",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/7IMReb/ego_l",
+                    "num_frames": 15390
+                },
+                "ego_r": {
+                    "path": "frames_open/7IMReb/ego_r",
+                    "num_frames": 15390
+                },
+                "ego_m": {
+                    "path": "frames_open/7IMReb/ego_m",
+                    "num_frames": 15392
+                }
+            },
+            "num_views": 3,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        20,
+                        2120
+                    ],
+                    [
+                        3050,
+                        4091
+                    ],
+                    [
+                        12950,
+                        14830
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0924-Ziming",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/t1DdZ0/ego_l",
+                    "num_frames": 9721
+                },
+                "ego_r": {
+                    "path": "frames_open/t1DdZ0/ego_r",
+                    "num_frames": 9721
+                },
+                "ego_m": {
+                    "path": "frames_open/t1DdZ0/ego_m",
+                    "num_frames": 9722
+                },
+                "exo_m": {
+                    "path": "frames_open/t1DdZ0/exo_m",
+                    "num_frames": 9720
+                },
+                "exo_l": {
+                    "path": "frames_open/t1DdZ0/exo_l",
+                    "num_frames": 9720
+                },
+                "exo_r": {
+                    "path": "frames_open/t1DdZ0/exo_r",
+                    "num_frames": 9720
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        1060
+                    ],
+                    [
+                        1900,
+                        3640
+                    ],
+                    [
+                        5350,
+                        8280
+                    ]
+                ]
+            },
+            "num_actions": 11
+        },
+        {
+            "original_actor": "0925-Dengjie",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/52RvEJ/ego_l",
+                    "num_frames": 11671
+                },
+                "ego_r": {
+                    "path": "frames_open/52RvEJ/ego_r",
+                    "num_frames": 11671
+                },
+                "ego_m": {
+                    "path": "frames_open/52RvEJ/ego_m",
+                    "num_frames": 11672
+                },
+                "exo_m": {
+                    "path": "frames_open/52RvEJ/exo_m",
+                    "num_frames": 11670
+                },
+                "exo_l": {
+                    "path": "frames_open/52RvEJ/exo_l",
+                    "num_frames": 11671
+                },
+                "exo_r": {
+                    "path": "frames_open/52RvEJ/exo_r",
+                    "num_frames": 11670
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        20,
+                        3046
+                    ],
+                    [
+                        4321,
+                        8296
+                    ],
+                    [
+                        8910,
+                        11200
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "0925-Guangwei",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/85O2Ni/ego_l",
+                    "num_frames": 8490
+                },
+                "ego_r": {
+                    "path": "frames_open/85O2Ni/ego_r",
+                    "num_frames": 8490
+                },
+                "ego_m": {
+                    "path": "frames_open/85O2Ni/ego_m",
+                    "num_frames": 8492
+                },
+                "exo_m": {
+                    "path": "frames_open/85O2Ni/exo_m",
+                    "num_frames": 8490
+                },
+                "exo_l": {
+                    "path": "frames_open/85O2Ni/exo_l",
+                    "num_frames": 8491
+                },
+                "exo_r": {
+                    "path": "frames_open/85O2Ni/exo_r",
+                    "num_frames": 8490
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        1880
+                    ],
+                    [
+                        2660,
+                        4186
+                    ],
+                    [
+                        6120,
+                        8270
+                    ]
+                ]
+            },
+            "num_actions": 17
+        },
+        {
+            "original_actor": "0925-Jianan",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/08ALrC/ego_l",
+                    "num_frames": 17283
+                },
+                "ego_r": {
+                    "path": "frames_open/08ALrC/ego_r",
+                    "num_frames": 17289
+                },
+                "ego_m": {
+                    "path": "frames_open/08ALrC/ego_m",
+                    "num_frames": 17280
+                },
+                "exo_m": {
+                    "path": "frames_open/08ALrC/exo_m",
+                    "num_frames": 13807
+                },
+                "exo_l": {
+                    "path": "frames_open/08ALrC/exo_l",
+                    "num_frames": 20122
+                },
+                "exo_r": {
+                    "path": "frames_open/08ALrC/exo_r",
+                    "num_frames": 20130
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "2",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        80,
+                        3920
+                    ],
+                    [
+                        7560,
+                        11970
+                    ]
+                ]
+            },
+            "num_actions": 11
+        },
+        {
+            "original_actor": "0925-Jinchao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/SlgE27/ego_l",
+                    "num_frames": 10620
+                },
+                "ego_r": {
+                    "path": "frames_open/SlgE27/ego_r",
+                    "num_frames": 10439
+                },
+                "ego_m": {
+                    "path": "frames_open/SlgE27/ego_m",
+                    "num_frames": 10773
+                },
+                "exo_m": {
+                    "path": "frames_open/SlgE27/exo_m",
+                    "num_frames": 11130
+                },
+                "exo_l": {
+                    "path": "frames_open/SlgE27/exo_l",
+                    "num_frames": 11131
+                },
+                "exo_r": {
+                    "path": "frames_open/SlgE27/exo_r",
+                    "num_frames": 11130
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        33,
+                        2380
+                    ],
+                    [
+                        3569,
+                        5960
+                    ],
+                    [
+                        7269,
+                        10150
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0925-Yingru",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/ePtwBl/ego_l",
+                    "num_frames": 13230
+                },
+                "ego_r": {
+                    "path": "frames_open/ePtwBl/ego_r",
+                    "num_frames": 13230
+                },
+                "ego_m": {
+                    "path": "frames_open/ePtwBl/ego_m",
+                    "num_frames": 13232
+                },
+                "exo_m": {
+                    "path": "frames_open/ePtwBl/exo_m",
+                    "num_frames": 13230
+                },
+                "exo_l": {
+                    "path": "frames_open/ePtwBl/exo_l",
+                    "num_frames": 13230
+                },
+                "exo_r": {
+                    "path": "frames_open/ePtwBl/exo_r",
+                    "num_frames": 13230
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        20,
+                        4320
+                    ],
+                    [
+                        7290,
+                        9678
+                    ],
+                    [
+                        10876,
+                        12930
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0925-Zhaowen",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/VfvVcI/ego_l",
+                    "num_frames": 8400
+                },
+                "ego_r": {
+                    "path": "frames_open/VfvVcI/ego_r",
+                    "num_frames": 8400
+                },
+                "ego_m": {
+                    "path": "frames_open/VfvVcI/ego_m",
+                    "num_frames": 8402
+                },
+                "exo_m": {
+                    "path": "frames_open/VfvVcI/exo_m",
+                    "num_frames": 8400
+                },
+                "exo_l": {
+                    "path": "frames_open/VfvVcI/exo_l",
+                    "num_frames": 8401
+                },
+                "exo_r": {
+                    "path": "frames_open/VfvVcI/exo_r",
+                    "num_frames": 8400
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        31,
+                        1678
+                    ],
+                    [
+                        2718,
+                        3966
+                    ],
+                    [
+                        6744,
+                        8400
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0927-Jianan",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/bccnRq/ego_l",
+                    "num_frames": 15180
+                },
+                "ego_r": {
+                    "path": "frames_open/bccnRq/ego_r",
+                    "num_frames": 15180
+                },
+                "ego_m": {
+                    "path": "frames_open/bccnRq/ego_m",
+                    "num_frames": 15182
+                },
+                "exo_m": {
+                    "path": "frames_open/bccnRq/exo_m",
+                    "num_frames": 15180
+                },
+                "exo_l": {
+                    "path": "frames_open/bccnRq/exo_l",
+                    "num_frames": 15181
+                },
+                "exo_r": {
+                    "path": "frames_open/bccnRq/exo_r",
+                    "num_frames": 15180
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        120,
+                        3451
+                    ],
+                    [
+                        5179,
+                        7960
+                    ],
+                    [
+                        10370,
+                        14150
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0927-Jinchao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/gwBuNO/ego_l",
+                    "num_frames": 9571
+                },
+                "ego_r": {
+                    "path": "frames_open/gwBuNO/ego_r",
+                    "num_frames": 9571
+                },
+                "ego_m": {
+                    "path": "frames_open/gwBuNO/ego_m",
+                    "num_frames": 9572
+                },
+                "exo_m": {
+                    "path": "frames_open/gwBuNO/exo_m",
+                    "num_frames": 9570
+                },
+                "exo_l": {
+                    "path": "frames_open/gwBuNO/exo_l",
+                    "num_frames": 9571
+                },
+                "exo_r": {
+                    "path": "frames_open/gwBuNO/exo_r",
+                    "num_frames": 9570
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        1508
+                    ],
+                    [
+                        3030,
+                        5950
+                    ],
+                    [
+                        6530,
+                        8615
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0927-Junhao",
+            "views": [
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_r": {
+                    "path": "frames_open/zOfbr6/ego_r",
+                    "num_frames": 18060
+                },
+                "ego_m": {
+                    "path": "frames_open/zOfbr6/ego_m",
+                    "num_frames": 18062
+                },
+                "exo_m": {
+                    "path": "frames_open/zOfbr6/exo_m",
+                    "num_frames": 18060
+                },
+                "exo_l": {
+                    "path": "frames_open/zOfbr6/exo_l",
+                    "num_frames": 18060
+                },
+                "exo_r": {
+                    "path": "frames_open/zOfbr6/exo_r",
+                    "num_frames": 18060
+                }
+            },
+            "num_views": 5,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        38,
+                        4482
+                    ],
+                    [
+                        6160,
+                        10500
+                    ],
+                    [
+                        12429,
+                        17258
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0927-Shiyi",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/ripW9E/ego_l",
+                    "num_frames": 12116
+                },
+                "ego_r": {
+                    "path": "frames_open/ripW9E/ego_r",
+                    "num_frames": 12118
+                },
+                "ego_m": {
+                    "path": "frames_open/ripW9E/ego_m",
+                    "num_frames": 12122
+                },
+                "exo_m": {
+                    "path": "frames_open/ripW9E/exo_m",
+                    "num_frames": 12120
+                },
+                "exo_l": {
+                    "path": "frames_open/ripW9E/exo_l",
+                    "num_frames": 12121
+                },
+                "exo_r": {
+                    "path": "frames_open/ripW9E/exo_r",
+                    "num_frames": 12120
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        50,
+                        2654
+                    ],
+                    [
+                        4317,
+                        5412
+                    ],
+                    [
+                        7856,
+                        10550
+                    ]
+                ]
+            },
+            "num_actions": 12
+        },
+        {
+            "original_actor": "0927-Ziye",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/FQPS6Y/ego_l",
+                    "num_frames": 7200
+                },
+                "ego_r": {
+                    "path": "frames_open/FQPS6Y/ego_r",
+                    "num_frames": 7197
+                },
+                "ego_m": {
+                    "path": "frames_open/FQPS6Y/ego_m",
+                    "num_frames": 7202
+                },
+                "exo_m": {
+                    "path": "frames_open/FQPS6Y/exo_m",
+                    "num_frames": 7200
+                },
+                "exo_l": {
+                    "path": "frames_open/FQPS6Y/exo_l",
+                    "num_frames": 7201
+                },
+                "exo_r": {
+                    "path": "frames_open/FQPS6Y/exo_r",
+                    "num_frames": 7200
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        45,
+                        1611
+                    ],
+                    [
+                        2277,
+                        4460
+                    ],
+                    [
+                        4906,
+                        7000
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "0928-Jianan",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/4ZAmJ9/ego_l",
+                    "num_frames": 9090
+                },
+                "ego_r": {
+                    "path": "frames_open/4ZAmJ9/ego_r",
+                    "num_frames": 9090
+                },
+                "ego_m": {
+                    "path": "frames_open/4ZAmJ9/ego_m",
+                    "num_frames": 9092
+                },
+                "exo_m": {
+                    "path": "frames_open/4ZAmJ9/exo_m",
+                    "num_frames": 9090
+                },
+                "exo_l": {
+                    "path": "frames_open/4ZAmJ9/exo_l",
+                    "num_frames": 9091
+                },
+                "exo_r": {
+                    "path": "frames_open/4ZAmJ9/exo_r",
+                    "num_frames": 9090
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        23,
+                        1749
+                    ],
+                    [
+                        3076,
+                        6249
+                    ],
+                    [
+                        6747,
+                        8625
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "0928-Jinchao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/qjJSaD/ego_l",
+                    "num_frames": 8323
+                },
+                "ego_r": {
+                    "path": "frames_open/qjJSaD/ego_r",
+                    "num_frames": 8315
+                },
+                "ego_m": {
+                    "path": "frames_open/qjJSaD/ego_m",
+                    "num_frames": 8277
+                },
+                "exo_m": {
+                    "path": "frames_open/qjJSaD/exo_m",
+                    "num_frames": 9030
+                },
+                "exo_l": {
+                    "path": "frames_open/qjJSaD/exo_l",
+                    "num_frames": 9031
+                },
+                "exo_r": {
+                    "path": "frames_open/qjJSaD/exo_r",
+                    "num_frames": 9030
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        45,
+                        1967
+                    ],
+                    [
+                        2424,
+                        4543
+                    ],
+                    [
+                        5032,
+                        7608
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0928-Yangle",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/Ju8x8K/ego_l",
+                    "num_frames": 11160
+                },
+                "ego_r": {
+                    "path": "frames_open/Ju8x8K/ego_r",
+                    "num_frames": 11160
+                },
+                "ego_m": {
+                    "path": "frames_open/Ju8x8K/ego_m",
+                    "num_frames": 11162
+                },
+                "exo_m": {
+                    "path": "frames_open/Ju8x8K/exo_m",
+                    "num_frames": 11160
+                },
+                "exo_l": {
+                    "path": "frames_open/Ju8x8K/exo_l",
+                    "num_frames": 11161
+                },
+                "exo_r": {
+                    "path": "frames_open/Ju8x8K/exo_r",
+                    "num_frames": 11160
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        22,
+                        1841
+                    ],
+                    [
+                        3431,
+                        6628
+                    ],
+                    [
+                        8125,
+                        10787
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "0928-Yingru",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/6n9JEC/ego_l",
+                    "num_frames": 11641
+                },
+                "ego_r": {
+                    "path": "frames_open/6n9JEC/ego_r",
+                    "num_frames": 11641
+                },
+                "ego_m": {
+                    "path": "frames_open/6n9JEC/ego_m",
+                    "num_frames": 11642
+                },
+                "exo_m": {
+                    "path": "frames_open/6n9JEC/exo_m",
+                    "num_frames": 11640
+                },
+                "exo_l": {
+                    "path": "frames_open/6n9JEC/exo_l",
+                    "num_frames": 11628
+                },
+                "exo_r": {
+                    "path": "frames_open/6n9JEC/exo_r",
+                    "num_frames": 11640
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        45,
+                        1893
+                    ],
+                    [
+                        3127,
+                        5399
+                    ],
+                    [
+                        8327,
+                        11142
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "0928-Zhangjie",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/efRWi4/ego_l",
+                    "num_frames": 10670
+                },
+                "ego_r": {
+                    "path": "frames_open/efRWi4/ego_r",
+                    "num_frames": 10744
+                },
+                "ego_m": {
+                    "path": "frames_open/efRWi4/ego_m",
+                    "num_frames": 10442
+                },
+                "exo_m": {
+                    "path": "frames_open/efRWi4/exo_m",
+                    "num_frames": 11340
+                },
+                "exo_l": {
+                    "path": "frames_open/efRWi4/exo_l",
+                    "num_frames": 11340
+                },
+                "exo_r": {
+                    "path": "frames_open/efRWi4/exo_r",
+                    "num_frames": 11340
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        36,
+                        3451
+                    ],
+                    [
+                        3631,
+                        7315
+                    ],
+                    [
+                        7531,
+                        10234
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "0928-Ziming",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/wfuNhF/ego_l",
+                    "num_frames": 13170
+                },
+                "ego_r": {
+                    "path": "frames_open/wfuNhF/ego_r",
+                    "num_frames": 13170
+                },
+                "ego_m": {
+                    "path": "frames_open/wfuNhF/ego_m",
+                    "num_frames": 13172
+                },
+                "exo_m": {
+                    "path": "frames_open/wfuNhF/exo_m",
+                    "num_frames": 13170
+                },
+                "exo_l": {
+                    "path": "frames_open/wfuNhF/exo_l",
+                    "num_frames": 13170
+                },
+                "exo_r": {
+                    "path": "frames_open/wfuNhF/exo_r",
+                    "num_frames": 13170
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        50,
+                        2485
+                    ],
+                    [
+                        3616,
+                        6565
+                    ],
+                    [
+                        7484,
+                        10524
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "1017-Guohong",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/hOmM1K/ego_l",
+                    "num_frames": 17701
+                },
+                "ego_r": {
+                    "path": "frames_open/hOmM1K/ego_r",
+                    "num_frames": 17701
+                },
+                "ego_m": {
+                    "path": "frames_open/hOmM1K/ego_m",
+                    "num_frames": 17702
+                },
+                "exo_m": {
+                    "path": "frames_open/hOmM1K/exo_m",
+                    "num_frames": 17700
+                },
+                "exo_l": {
+                    "path": "frames_open/hOmM1K/exo_l",
+                    "num_frames": 17700
+                },
+                "exo_r": {
+                    "path": "frames_open/hOmM1K/exo_r",
+                    "num_frames": 17700
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        1,
+                        2880
+                    ],
+                    [
+                        8810,
+                        11500
+                    ],
+                    [
+                        14940,
+                        17090
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "1017-Huiwen",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/hzfx1h/ego_l",
+                    "num_frames": 9931
+                },
+                "ego_r": {
+                    "path": "frames_open/hzfx1h/ego_r",
+                    "num_frames": 9931
+                },
+                "ego_m": {
+                    "path": "frames_open/hzfx1h/ego_m",
+                    "num_frames": 9932
+                },
+                "exo_m": {
+                    "path": "frames_open/hzfx1h/exo_m",
+                    "num_frames": 9930
+                },
+                "exo_l": {
+                    "path": "frames_open/hzfx1h/exo_l",
+                    "num_frames": 9930
+                },
+                "exo_r": {
+                    "path": "frames_open/hzfx1h/exo_r",
+                    "num_frames": 9930
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        2536
+                    ],
+                    [
+                        3930,
+                        6751
+                    ],
+                    [
+                        7100,
+                        9301
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "1017-Jiarun",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/m6KopZ/ego_l",
+                    "num_frames": 7711
+                },
+                "ego_r": {
+                    "path": "frames_open/m6KopZ/ego_r",
+                    "num_frames": 7711
+                },
+                "ego_m": {
+                    "path": "frames_open/m6KopZ/ego_m",
+                    "num_frames": 7712
+                },
+                "exo_m": {
+                    "path": "frames_open/m6KopZ/exo_m",
+                    "num_frames": 7710
+                },
+                "exo_l": {
+                    "path": "frames_open/m6KopZ/exo_l",
+                    "num_frames": 7710
+                },
+                "exo_r": {
+                    "path": "frames_open/m6KopZ/exo_r",
+                    "num_frames": 7710
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        2701
+                    ],
+                    [
+                        3600,
+                        5310
+                    ],
+                    [
+                        5720,
+                        7550
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "1017-Renjie",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/Szmqw5/ego_l",
+                    "num_frames": 20941
+                },
+                "ego_r": {
+                    "path": "frames_open/Szmqw5/ego_r",
+                    "num_frames": 20941
+                },
+                "ego_m": {
+                    "path": "frames_open/Szmqw5/ego_m",
+                    "num_frames": 20942
+                },
+                "exo_m": {
+                    "path": "frames_open/Szmqw5/exo_m",
+                    "num_frames": 20940
+                },
+                "exo_l": {
+                    "path": "frames_open/Szmqw5/exo_l",
+                    "num_frames": 20940
+                },
+                "exo_r": {
+                    "path": "frames_open/Szmqw5/exo_r",
+                    "num_frames": 20940
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        20,
+                        2150
+                    ],
+                    [
+                        10600,
+                        13390
+                    ],
+                    [
+                        17860,
+                        20900
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "1017-Shenghao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/62c2V9/ego_l",
+                    "num_frames": 9991
+                },
+                "ego_r": {
+                    "path": "frames_open/62c2V9/ego_r",
+                    "num_frames": 9991
+                },
+                "ego_m": {
+                    "path": "frames_open/62c2V9/ego_m",
+                    "num_frames": 9992
+                },
+                "exo_m": {
+                    "path": "frames_open/62c2V9/exo_m",
+                    "num_frames": 9990
+                },
+                "exo_l": {
+                    "path": "frames_open/62c2V9/exo_l",
+                    "num_frames": 9990
+                },
+                "exo_r": {
+                    "path": "frames_open/62c2V9/exo_r",
+                    "num_frames": 9990
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        3016
+                    ],
+                    [
+                        3820,
+                        6170
+                    ],
+                    [
+                        6780,
+                        9320
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "1017-Xiaowen",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/SMPFTP/ego_l",
+                    "num_frames": 11791
+                },
+                "ego_r": {
+                    "path": "frames_open/SMPFTP/ego_r",
+                    "num_frames": 11791
+                },
+                "ego_m": {
+                    "path": "frames_open/SMPFTP/ego_m",
+                    "num_frames": 11792
+                },
+                "exo_m": {
+                    "path": "frames_open/SMPFTP/exo_m",
+                    "num_frames": 11790
+                },
+                "exo_l": {
+                    "path": "frames_open/SMPFTP/exo_l",
+                    "num_frames": 11790
+                },
+                "exo_r": {
+                    "path": "frames_open/SMPFTP/exo_r",
+                    "num_frames": 11781
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        76,
+                        3571
+                    ],
+                    [
+                        4660,
+                        7201
+                    ],
+                    [
+                        8460,
+                        10801
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "1018-Huilin",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/9jZICf/ego_l",
+                    "num_frames": 13981
+                },
+                "ego_r": {
+                    "path": "frames_open/9jZICf/ego_r",
+                    "num_frames": 13981
+                },
+                "ego_m": {
+                    "path": "frames_open/9jZICf/ego_m",
+                    "num_frames": 13982
+                },
+                "exo_m": {
+                    "path": "frames_open/9jZICf/exo_m",
+                    "num_frames": 13980
+                },
+                "exo_l": {
+                    "path": "frames_open/9jZICf/exo_l",
+                    "num_frames": 13980
+                },
+                "exo_r": {
+                    "path": "frames_open/9jZICf/exo_r",
+                    "num_frames": 13980
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        5410
+                    ],
+                    [
+                        6410,
+                        9361
+                    ],
+                    [
+                        10051,
+                        13701
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "1018-Jiafeng",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/Acz3SK/ego_l",
+                    "num_frames": 19170
+                },
+                "ego_r": {
+                    "path": "frames_open/Acz3SK/ego_r",
+                    "num_frames": 19170
+                },
+                "ego_m": {
+                    "path": "frames_open/Acz3SK/ego_m",
+                    "num_frames": 19172
+                },
+                "exo_m": {
+                    "path": "frames_open/Acz3SK/exo_m",
+                    "num_frames": 19170
+                },
+                "exo_l": {
+                    "path": "frames_open/Acz3SK/exo_l",
+                    "num_frames": 19170
+                },
+                "exo_r": {
+                    "path": "frames_open/Acz3SK/exo_r",
+                    "num_frames": 19170
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        5611
+                    ],
+                    [
+                        6856,
+                        12346
+                    ],
+                    [
+                        13186,
+                        18451
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "1018-Jianjian",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/UE156K/ego_l",
+                    "num_frames": 13350
+                },
+                "ego_r": {
+                    "path": "frames_open/UE156K/ego_r",
+                    "num_frames": 13350
+                },
+                "ego_m": {
+                    "path": "frames_open/UE156K/ego_m",
+                    "num_frames": 13352
+                },
+                "exo_m": {
+                    "path": "frames_open/UE156K/exo_m",
+                    "num_frames": 13350
+                },
+                "exo_l": {
+                    "path": "frames_open/UE156K/exo_l",
+                    "num_frames": 13350
+                },
+                "exo_r": {
+                    "path": "frames_open/UE156K/exo_r",
+                    "num_frames": 13350
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        3684
+                    ],
+                    [
+                        6030,
+                        9541
+                    ],
+                    [
+                        10981,
+                        12890
+                    ]
+                ]
+            },
+            "num_actions": 12
+        },
+        {
+            "original_actor": "1018-Junhui",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/Of1Uia/ego_l",
+                    "num_frames": 9210
+                },
+                "ego_r": {
+                    "path": "frames_open/Of1Uia/ego_r",
+                    "num_frames": 9210
+                },
+                "ego_m": {
+                    "path": "frames_open/Of1Uia/ego_m",
+                    "num_frames": 9212
+                },
+                "exo_m": {
+                    "path": "frames_open/Of1Uia/exo_m",
+                    "num_frames": 9210
+                },
+                "exo_l": {
+                    "path": "frames_open/Of1Uia/exo_l",
+                    "num_frames": 9210
+                },
+                "exo_r": {
+                    "path": "frames_open/Of1Uia/exo_r",
+                    "num_frames": 9210
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        60,
+                        2791
+                    ],
+                    [
+                        3691,
+                        6030
+                    ],
+                    [
+                        6840,
+                        8641
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "1018-Yuhan",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/AXQTck/ego_l",
+                    "num_frames": 20971
+                },
+                "ego_r": {
+                    "path": "frames_open/AXQTck/ego_r",
+                    "num_frames": 20971
+                },
+                "ego_m": {
+                    "path": "frames_open/AXQTck/ego_m",
+                    "num_frames": 20972
+                },
+                "exo_m": {
+                    "path": "frames_open/AXQTck/exo_m",
+                    "num_frames": 20970
+                },
+                "exo_l": {
+                    "path": "frames_open/AXQTck/exo_l",
+                    "num_frames": 20970
+                },
+                "exo_r": {
+                    "path": "frames_open/AXQTck/exo_r",
+                    "num_frames": 20970
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "4",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        16,
+                        2100
+                    ],
+                    [
+                        5490,
+                        9340
+                    ],
+                    [
+                        11101,
+                        15175
+                    ],
+                    [
+                        16980,
+                        20960
+                    ]
+                ]
+            },
+            "num_actions": 19
+        },
+        {
+            "original_actor": "1018-Zexin",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/TtyVA1/ego_l",
+                    "num_frames": 6300
+                },
+                "ego_r": {
+                    "path": "frames_open/TtyVA1/ego_r",
+                    "num_frames": 6300
+                },
+                "ego_m": {
+                    "path": "frames_open/TtyVA1/ego_m",
+                    "num_frames": 6302
+                },
+                "exo_m": {
+                    "path": "frames_open/TtyVA1/exo_m",
+                    "num_frames": 6300
+                },
+                "exo_l": {
+                    "path": "frames_open/TtyVA1/exo_l",
+                    "num_frames": 6300
+                },
+                "exo_r": {
+                    "path": "frames_open/TtyVA1/exo_r",
+                    "num_frames": 6300
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        1570
+                    ],
+                    [
+                        2020,
+                        3134
+                    ],
+                    [
+                        3960,
+                        5190
+                    ]
+                ]
+            },
+            "num_actions": 10
+        },
+        {
+            "original_actor": "1018-Zhengdian",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/9ZMJLs/ego_l",
+                    "num_frames": 10200
+                },
+                "ego_r": {
+                    "path": "frames_open/9ZMJLs/ego_r",
+                    "num_frames": 10200
+                },
+                "ego_m": {
+                    "path": "frames_open/9ZMJLs/ego_m",
+                    "num_frames": 10202
+                },
+                "exo_m": {
+                    "path": "frames_open/9ZMJLs/exo_m",
+                    "num_frames": 10200
+                },
+                "exo_l": {
+                    "path": "frames_open/9ZMJLs/exo_l",
+                    "num_frames": 10200
+                },
+                "exo_r": {
+                    "path": "frames_open/9ZMJLs/exo_r",
+                    "num_frames": 10200
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        2400
+                    ],
+                    [
+                        3330,
+                        6330
+                    ],
+                    [
+                        7030,
+                        9854
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "1019-Chennuo",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/vkpoOC/ego_l",
+                    "num_frames": 8761
+                },
+                "ego_r": {
+                    "path": "frames_open/vkpoOC/ego_r",
+                    "num_frames": 8761
+                },
+                "ego_m": {
+                    "path": "frames_open/vkpoOC/ego_m",
+                    "num_frames": 8762
+                },
+                "exo_m": {
+                    "path": "frames_open/vkpoOC/exo_m",
+                    "num_frames": 8760
+                },
+                "exo_l": {
+                    "path": "frames_open/vkpoOC/exo_l",
+                    "num_frames": 8760
+                },
+                "exo_r": {
+                    "path": "frames_open/vkpoOC/exo_r",
+                    "num_frames": 8760
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        2476
+                    ],
+                    [
+                        3300,
+                        5431
+                    ],
+                    [
+                        6091,
+                        7890
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "1019-Jianan",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/wNsRwL/ego_l",
+                    "num_frames": 16891
+                },
+                "ego_r": {
+                    "path": "frames_open/wNsRwL/ego_r",
+                    "num_frames": 16891
+                },
+                "ego_m": {
+                    "path": "frames_open/wNsRwL/ego_m",
+                    "num_frames": 16892
+                },
+                "exo_m": {
+                    "path": "frames_open/wNsRwL/exo_m",
+                    "num_frames": 16890
+                },
+                "exo_l": {
+                    "path": "frames_open/wNsRwL/exo_l",
+                    "num_frames": 16890
+                },
+                "exo_r": {
+                    "path": "frames_open/wNsRwL/exo_r",
+                    "num_frames": 16890
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        3661
+                    ],
+                    [
+                        5536,
+                        8131
+                    ],
+                    [
+                        13840,
+                        16309
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "1019-Jinchao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/z8RAua/ego_l",
+                    "num_frames": 11310
+                },
+                "ego_r": {
+                    "path": "frames_open/z8RAua/ego_r",
+                    "num_frames": 11310
+                },
+                "ego_m": {
+                    "path": "frames_open/z8RAua/ego_m",
+                    "num_frames": 11312
+                },
+                "exo_m": {
+                    "path": "frames_open/z8RAua/exo_m",
+                    "num_frames": 11310
+                },
+                "exo_l": {
+                    "path": "frames_open/z8RAua/exo_l",
+                    "num_frames": 11310
+                },
+                "exo_r": {
+                    "path": "frames_open/z8RAua/exo_r",
+                    "num_frames": 11310
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        50,
+                        2030
+                    ],
+                    [
+                        4770,
+                        7450
+                    ],
+                    [
+                        9300,
+                        10966
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "1019-Ziye",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/tPwy1Q/ego_l",
+                    "num_frames": 7110
+                },
+                "ego_r": {
+                    "path": "frames_open/tPwy1Q/ego_r",
+                    "num_frames": 7110
+                },
+                "ego_m": {
+                    "path": "frames_open/tPwy1Q/ego_m",
+                    "num_frames": 7112
+                },
+                "exo_m": {
+                    "path": "frames_open/tPwy1Q/exo_m",
+                    "num_frames": 7110
+                },
+                "exo_l": {
+                    "path": "frames_open/tPwy1Q/exo_l",
+                    "num_frames": 7110
+                },
+                "exo_r": {
+                    "path": "frames_open/tPwy1Q/exo_r",
+                    "num_frames": 7110
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        50,
+                        1651
+                    ],
+                    [
+                        2071,
+                        4051
+                    ],
+                    [
+                        4560,
+                        6950
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "1020-Jianan",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/kSRn9X/ego_l",
+                    "num_frames": 11701
+                },
+                "ego_r": {
+                    "path": "frames_open/kSRn9X/ego_r",
+                    "num_frames": 11701
+                },
+                "ego_m": {
+                    "path": "frames_open/kSRn9X/ego_m",
+                    "num_frames": 11702
+                },
+                "exo_m": {
+                    "path": "frames_open/kSRn9X/exo_m",
+                    "num_frames": 11700
+                },
+                "exo_l": {
+                    "path": "frames_open/kSRn9X/exo_l",
+                    "num_frames": 11700
+                },
+                "exo_r": {
+                    "path": "frames_open/kSRn9X/exo_r",
+                    "num_frames": 11700
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        4090
+                    ],
+                    [
+                        5040,
+                        7546
+                    ],
+                    [
+                        8446,
+                        11191
+                    ]
+                ]
+            },
+            "num_actions": 15
+        },
+        {
+            "original_actor": "1020-Jinchao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/LOv2mp/ego_l",
+                    "num_frames": 10320
+                },
+                "ego_r": {
+                    "path": "frames_open/LOv2mp/ego_r",
+                    "num_frames": 10320
+                },
+                "ego_m": {
+                    "path": "frames_open/LOv2mp/ego_m",
+                    "num_frames": 10322
+                },
+                "exo_m": {
+                    "path": "frames_open/LOv2mp/exo_m",
+                    "num_frames": 10320
+                },
+                "exo_l": {
+                    "path": "frames_open/LOv2mp/exo_l",
+                    "num_frames": 10320
+                },
+                "exo_r": {
+                    "path": "frames_open/LOv2mp/exo_r",
+                    "num_frames": 10320
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        1250
+                    ],
+                    [
+                        2880,
+                        5881
+                    ],
+                    [
+                        7590,
+                        9586
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "1020-Shiyi",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/Y1t9Ew/ego_l",
+                    "num_frames": 17941
+                },
+                "ego_r": {
+                    "path": "frames_open/Y1t9Ew/ego_r",
+                    "num_frames": 17941
+                },
+                "ego_m": {
+                    "path": "frames_open/Y1t9Ew/ego_m",
+                    "num_frames": 17942
+                },
+                "exo_m": {
+                    "path": "frames_open/Y1t9Ew/exo_m",
+                    "num_frames": 17940
+                },
+                "exo_l": {
+                    "path": "frames_open/Y1t9Ew/exo_l",
+                    "num_frames": 17940
+                },
+                "exo_r": {
+                    "path": "frames_open/Y1t9Ew/exo_r",
+                    "num_frames": 17940
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        3460
+                    ],
+                    [
+                        7300,
+                        10220
+                    ],
+                    [
+                        14020,
+                        17161
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "1020-Zhangjie",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/naTWa0/ego_l",
+                    "num_frames": 14400
+                },
+                "ego_r": {
+                    "path": "frames_open/naTWa0/ego_r",
+                    "num_frames": 14400
+                },
+                "ego_m": {
+                    "path": "frames_open/naTWa0/ego_m",
+                    "num_frames": 14402
+                },
+                "exo_m": {
+                    "path": "frames_open/naTWa0/exo_m",
+                    "num_frames": 14400
+                },
+                "exo_l": {
+                    "path": "frames_open/naTWa0/exo_l",
+                    "num_frames": 14400
+                },
+                "exo_r": {
+                    "path": "frames_open/naTWa0/exo_r",
+                    "num_frames": 14400
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        5500
+                    ],
+                    [
+                        5960,
+                        10600
+                    ],
+                    [
+                        10951,
+                        13966
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "1020-Zihua",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/CfMZyu/ego_l",
+                    "num_frames": 10801
+                },
+                "ego_r": {
+                    "path": "frames_open/CfMZyu/ego_r",
+                    "num_frames": 10801
+                },
+                "ego_m": {
+                    "path": "frames_open/CfMZyu/ego_m",
+                    "num_frames": 10802
+                },
+                "exo_m": {
+                    "path": "frames_open/CfMZyu/exo_m",
+                    "num_frames": 10800
+                },
+                "exo_l": {
+                    "path": "frames_open/CfMZyu/exo_l",
+                    "num_frames": 10800
+                },
+                "exo_r": {
+                    "path": "frames_open/CfMZyu/exo_r",
+                    "num_frames": 10800
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        3031
+                    ],
+                    [
+                        3436,
+                        6290
+                    ],
+                    [
+                        6646,
+                        10426
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "1021-Jianan",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/5DOBx3/ego_l",
+                    "num_frames": 9360
+                },
+                "ego_r": {
+                    "path": "frames_open/5DOBx3/ego_r",
+                    "num_frames": 9360
+                },
+                "ego_m": {
+                    "path": "frames_open/5DOBx3/ego_m",
+                    "num_frames": 9362
+                },
+                "exo_m": {
+                    "path": "frames_open/5DOBx3/exo_m",
+                    "num_frames": 9360
+                },
+                "exo_l": {
+                    "path": "frames_open/5DOBx3/exo_l",
+                    "num_frames": 9360
+                },
+                "exo_r": {
+                    "path": "frames_open/5DOBx3/exo_r",
+                    "num_frames": 9360
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        2041
+                    ],
+                    [
+                        3300,
+                        5836
+                    ],
+                    [
+                        6406,
+                        8440
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "1021-Jinchao",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/CQlaER/ego_l",
+                    "num_frames": 11040
+                },
+                "ego_r": {
+                    "path": "frames_open/CQlaER/ego_r",
+                    "num_frames": 11040
+                },
+                "ego_m": {
+                    "path": "frames_open/CQlaER/ego_m",
+                    "num_frames": 11042
+                },
+                "exo_m": {
+                    "path": "frames_open/CQlaER/exo_m",
+                    "num_frames": 11040
+                },
+                "exo_l": {
+                    "path": "frames_open/CQlaER/exo_l",
+                    "num_frames": 11040
+                },
+                "exo_r": {
+                    "path": "frames_open/CQlaER/exo_r",
+                    "num_frames": 11040
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        3410
+                    ],
+                    [
+                        4861,
+                        7430
+                    ],
+                    [
+                        8416,
+                        10600
+                    ]
+                ]
+            },
+            "num_actions": 16
+        },
+        {
+            "original_actor": "1021-Laihui",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/j7c1f5/ego_l",
+                    "num_frames": 11340
+                },
+                "ego_r": {
+                    "path": "frames_open/j7c1f5/ego_r",
+                    "num_frames": 11340
+                },
+                "ego_m": {
+                    "path": "frames_open/j7c1f5/ego_m",
+                    "num_frames": 11342
+                },
+                "exo_l": {
+                    "path": "frames_open/j7c1f5/exo_l",
+                    "num_frames": 11340
+                },
+                "exo_r": {
+                    "path": "frames_open/j7c1f5/exo_r",
+                    "num_frames": 11340
+                }
+            },
+            "num_views": 5,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        27,
+                        3530
+                    ],
+                    [
+                        4430,
+                        7040
+                    ],
+                    [
+                        7480,
+                        10760
+                    ]
+                ]
+            },
+            "num_actions": 17
+        },
+        {
+            "original_actor": "1021-Shiyi",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/fu4G7F/ego_l",
+                    "num_frames": 11911
+                },
+                "ego_r": {
+                    "path": "frames_open/fu4G7F/ego_r",
+                    "num_frames": 11911
+                },
+                "ego_m": {
+                    "path": "frames_open/fu4G7F/ego_m",
+                    "num_frames": 11912
+                },
+                "exo_m": {
+                    "path": "frames_open/fu4G7F/exo_m",
+                    "num_frames": 11910
+                },
+                "exo_l": {
+                    "path": "frames_open/fu4G7F/exo_l",
+                    "num_frames": 11910
+                },
+                "exo_r": {
+                    "path": "frames_open/fu4G7F/exo_r",
+                    "num_frames": 11910
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        3300
+                    ],
+                    [
+                        3350,
+                        5026
+                    ],
+                    [
+                        7096,
+                        10891
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "1021-Yingru",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/bUrhTo/ego_l",
+                    "num_frames": 12931
+                },
+                "ego_r": {
+                    "path": "frames_open/bUrhTo/ego_r",
+                    "num_frames": 12931
+                },
+                "ego_m": {
+                    "path": "frames_open/bUrhTo/ego_m",
+                    "num_frames": 12932
+                },
+                "exo_m": {
+                    "path": "frames_open/bUrhTo/exo_m",
+                    "num_frames": 12930
+                },
+                "exo_l": {
+                    "path": "frames_open/bUrhTo/exo_l",
+                    "num_frames": 12930
+                },
+                "exo_r": {
+                    "path": "frames_open/bUrhTo/exo_r",
+                    "num_frames": 12930
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        4546
+                    ],
+                    [
+                        6030,
+                        7490
+                    ],
+                    [
+                        9190,
+                        12370
+                    ]
+                ]
+            },
+            "num_actions": 14
+        },
+        {
+            "original_actor": "1021-Zhangjie",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/cMbm9l/ego_l",
+                    "num_frames": 11611
+                },
+                "ego_r": {
+                    "path": "frames_open/cMbm9l/ego_r",
+                    "num_frames": 11611
+                },
+                "ego_m": {
+                    "path": "frames_open/cMbm9l/ego_m",
+                    "num_frames": 11612
+                },
+                "exo_m": {
+                    "path": "frames_open/cMbm9l/exo_m",
+                    "num_frames": 11610
+                },
+                "exo_l": {
+                    "path": "frames_open/cMbm9l/exo_l",
+                    "num_frames": 11610
+                },
+                "exo_r": {
+                    "path": "frames_open/cMbm9l/exo_r",
+                    "num_frames": 11610
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        30,
+                        2690
+                    ],
+                    [
+                        3100,
+                        5956
+                    ],
+                    [
+                        7320,
+                        11071
+                    ]
+                ]
+            },
+            "num_actions": 13
+        },
+        {
+            "original_actor": "1021-Zhaowen",
+            "views": [
+                "ego_l",
+                "ego_r",
+                "ego_m",
+                "exo_m",
+                "exo_l",
+                "exo_r"
+            ],
+            "frames": {
+                "ego_l": {
+                    "path": "frames_open/oc0KO6/ego_l",
+                    "num_frames": 12931
+                },
+                "ego_r": {
+                    "path": "frames_open/oc0KO6/ego_r",
+                    "num_frames": 12931
+                },
+                "ego_m": {
+                    "path": "frames_open/oc0KO6/ego_m",
+                    "num_frames": 12932
+                },
+                "exo_m": {
+                    "path": "frames_open/oc0KO6/exo_m",
+                    "num_frames": 12930
+                },
+                "exo_l": {
+                    "path": "frames_open/oc0KO6/exo_l",
+                    "num_frames": 12930
+                },
+                "exo_r": {
+                    "path": "frames_open/oc0KO6/exo_r",
+                    "num_frames": 12930
+                }
+            },
+            "num_views": 6,
+            "num_sequences": "3",
+            "sequences": {
+                "sequence_start_end_frame": [
+                    [
+                        40,
+                        2670
+                    ],
+                    [
+                        7050,
+                        8930
+                    ],
+                    [
+                        11071,
+                        12320
+                    ]
+                ]
+            },
+            "num_actions": 12
+        }
+    ],
+    "record_index": {
+        "ThEnUZ": 0,
+        "xYkvB0": 1,
+        "3HqdZ6": 2,
+        "CeqSkC": 3,
+        "dYRk2k": 4,
+        "J6afU1": 5,
+        "RHNgmh": 6,
+        "q6ITZM": 7,
+        "CZYh3q": 8,
+        "IlnyLs": 9,
+        "gtJsTh": 10,
+        "vHqhM6": 11,
+        "MPm3tr": 12,
+        "Kpslm0": 13,
+        "zT0YQO": 14,
+        "dgYj2S": 15,
+        "Wa4cFu": 16,
+        "A5K3G6": 17,
+        "aNF03v": 18,
+        "wh3jr2": 19,
+        "d7RbIB": 20,
+        "lcNQqE": 21,
+        "H4F6JM": 22,
+        "S71IRz": 23,
+        "siWgNZ": 24,
+        "yT4RK3": 25,
+        "5jtgUe": 26,
+        "iPH0PP": 27,
+        "7IMReb": 28,
+        "t1DdZ0": 29,
+        "52RvEJ": 30,
+        "85O2Ni": 31,
+        "08ALrC": 32,
+        "SlgE27": 33,
+        "ePtwBl": 34,
+        "VfvVcI": 35,
+        "bccnRq": 36,
+        "gwBuNO": 37,
+        "zOfbr6": 38,
+        "ripW9E": 39,
+        "FQPS6Y": 40,
+        "4ZAmJ9": 41,
+        "qjJSaD": 42,
+        "Ju8x8K": 43,
+        "6n9JEC": 44,
+        "efRWi4": 45,
+        "wfuNhF": 46,
+        "hOmM1K": 47,
+        "hzfx1h": 48,
+        "m6KopZ": 49,
+        "Szmqw5": 50,
+        "62c2V9": 51,
+        "SMPFTP": 52,
+        "9jZICf": 53,
+        "Acz3SK": 54,
+        "UE156K": 55,
+        "Of1Uia": 56,
+        "AXQTck": 57,
+        "TtyVA1": 58,
+        "9ZMJLs": 59,
+        "vkpoOC": 60,
+        "wNsRwL": 61,
+        "z8RAua": 62,
+        "tPwy1Q": 63,
+        "kSRn9X": 64,
+        "LOv2mp": 65,
+        "Y1t9Ew": 66,
+        "naTWa0": 67,
+        "CfMZyu": 68,
+        "5DOBx3": 69,
+        "CQlaER": 70,
+        "j7c1f5": 71,
+        "fu4G7F": 72,
+        "bUrhTo": 73,
+        "cMbm9l": 74,
+        "oc0KO6": 75
+    }
+}

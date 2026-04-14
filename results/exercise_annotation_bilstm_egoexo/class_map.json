@@ -1,0 +1,30 @@
+{
+  "class_to_idx": {
+    "clap jacks": 0,
+    "high knee": 1,
+    "jumping jacks": 2,
+    "kneeling pushing-ups": 3,
+    "kneeling side torso twist": 4,
+    "leg lunge with knee lift": 5,
+    "leg reverse lunge": 6,
+    "push-ups": 7,
+    "shoulder bridge": 8,
+    "side knee raise and abdominal muscles contract": 9,
+    "sit-ups": 10,
+    "sumo squat": 11
+  },
+  "idx_to_class": {
+    "0": "clap jacks",
+    "1": "high knee",
+    "2": "jumping jacks",
+    "3": "kneeling pushing-ups",
+    "4": "kneeling side torso twist",
+    "5": "leg lunge with knee lift",
+    "6": "leg reverse lunge",
+    "7": "push-ups",
+    "8": "shoulder bridge",
+    "9": "side knee raise and abdominal muscles contract",
+    "10": "sit-ups",
+    "11": "sumo squat"
+  }
+}

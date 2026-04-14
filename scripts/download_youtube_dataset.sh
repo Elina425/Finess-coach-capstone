@@ -13,7 +13,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEFAULT_DST="${REPO_ROOT}/qevd-fit-coach-data/videos/long_range"
+DEFAULT_DST="${REPO_ROOT}/data/videos/long_range"
 
 DST="${DEFAULT_DST}"
 URLS_FILE=""

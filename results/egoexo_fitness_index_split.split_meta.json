@@ -1,0 +1,12 @@
+{
+  "input": "/Users/emelkonyan/Finess-coach-capstone-1/results/egoexo_fitness_index.csv",
+  "output": "/Users/emelkonyan/Finess-coach-capstone-1/results/egoexo_fitness_index_split.csv",
+  "test_ratio": 0.15,
+  "val_ratio": 0.15,
+  "seed": 42,
+  "counts": {
+    "train": 1067,
+    "val": 229,
+    "test": 229
+  }
+}

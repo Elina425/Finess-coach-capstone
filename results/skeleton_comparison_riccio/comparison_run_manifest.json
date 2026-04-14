@@ -1,0 +1,16 @@
+{
+  "dataset_root": "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3",
+  "seed": 42,
+  "randomize": true,
+  "num_videos": 8,
+  "videos": [
+    "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/my_test_video_1/squat/squat_3.mp4",
+    "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/final_kaggle_with_additional_video/hammer curl/hammer curl_10.mp4",
+    "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/synthetic_dataset/synthetic_dataset/push-up/000015.mp4",
+    "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/synthetic_dataset/synthetic_dataset/barbell biceps curl/000084.mp4",
+    "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/synthetic_dataset/synthetic_dataset/barbell biceps curl/000062.mp4",
+    "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/similar_dataset/push-up/bd26f1c8-271f-45d2-a877-0deaa4f6e6f2.mp4",
+    "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/my_test_video_1/barbell biceps curl/barbell biceps curl_4.mp4",
+    "/Users/emelkonyan/.cache/kagglehub/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions/3/synthetic_dataset/synthetic_dataset/squat/000092.mp4"
+  ]
+}

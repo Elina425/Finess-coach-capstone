@@ -2,9 +2,11 @@
 
 This document maps your thesis-style steps (§2–§9) to **folders**, **annotation files**, and **Python entry points** in this repository.
 
+**Default capstone workflow:** Riccio / Kaggle exercise videos → `pipeline/step_03_04_riccio_videos_to_angles.sh` → NPZs under e.g. `results/riccio_realtime_exercise_recognition/` → `train_exercise_bilstm.py --kaggle-angles-dir …`. The QEVD-style tree below is **optional legacy** layout only.
+
 ---
 
-## Data layout (`qevd-fit-coach-data/`)
+## Legacy data layout (`data/` or historical `qevd-fit-coach-data/`)
 
 | Resource | Location | Role |
 |----------|----------|------|
@@ -45,6 +47,8 @@ This document maps your thesis-style steps (§2–§9) to **folders**, **annotat
 **Typical command:** random clips + skeleton grids + aggregated FPS/confidence benchmark:
 
 `./venv/bin/python run_full_comparison.py --num-videos 3 --seed 42 --output-dir results/skeleton_comparison_random`
+
+**Video discovery:** (1) all `*.mp4` under `--dataset-root/videos/` (QEVD layout), or (2) if that is empty, all `*.mp4` recursively under `--dataset-root` (e.g. Riccio Kaggle cache — no need for a `videos/` subfolder). If you still see 0 files, the folder has no `.mp4` files or the path is wrong.
 
 (`--no-random` uses the first N videos in sorted path order; OpenPose is skipped if not installed.)
 
@@ -132,11 +136,13 @@ Outputs `*_keypoints_knn.npz` and `knn_imputation_meta.json`. Point training at 
 |------|------------------|
 | Index from labels + heuristics | `build_exercise_training_index.py`, `exercise_label_utils.py` |
 | Local long-range index | `setup_local_training_data.py` |
-| Train/val/test split | `split_exercise_index.py` |
+| Train/val/test split | `split_exercise_index.py` (QEVD CSV); **Riccio NPZs:** split inside `build_kaggle_angle_datasets` |
 | Dataset (30-frame windows) | `exercise_bilstm_dataset.py` |
 | Model (BiLSTM + cls + reg heads) | `exercise_bilstm_model.py` |
 | Training | `train_exercise_bilstm.py` (`--feature-mode angles|coords|mixed`, `--standardize`, `--preset riccio`) |
 | Inference | `inference_exercise_bilstm.py` |
+
+**Riccio / `--kaggle-angles-dir`:** when `*_labels.npz` includes **`video_id`** (from `riccio_kaggle_video_pipeline.py`), angle windows are built **per video only** (no cross-clip windows), and **train / val / test are assigned by video** with **stratification on class**—same spirit as stem-level splitting for QEVD, and avoids leakage from shuffling windows that share the same recording. NPZs without `video_id`, or a single-video timeline, keep stratified **window** splits.
 
 **Quality target:** CSV column `quality` ∈ [0,1] from `heuristic_quality_score` + optional feedback text.
 

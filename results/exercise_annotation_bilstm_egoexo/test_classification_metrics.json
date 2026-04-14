@@ -1,0 +1,22 @@
+{
+  "split": "test",
+  "accuracy": 0.1222707423580786,
+  "f1_macro": 0.04372179939370166,
+  "f1_per_class": {
+    "clap jacks": 0.0,
+    "high knee": 0.0,
+    "jumping jacks": 0.2198952879581152,
+    "kneeling pushing-ups": 0.0,
+    "kneeling side torso twist": 0.14814814814814814,
+    "leg lunge with knee lift": 0.0,
+    "leg reverse lunge": 0.0,
+    "push-ups": 0.0,
+    "shoulder bridge": 0.10256410256410256,
+    "side knee raise and abdominal muscles contract": 0.0,
+    "sit-ups": 0.05405405405405406,
+    "sumo squat": 0.0
+  },
+  "quality_rmse": 1.0288011128831223,
+  "quality_mae": 0.8515597795294882,
+  "quality_r2": -0.0245730142361944
+}

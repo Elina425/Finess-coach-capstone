@@ -1,0 +1,52 @@
+{
+  "videos_used": 50,
+  "models": {
+    "mediapipe": {
+      "avg_fps": 62.41851717077813,
+      "avg_inference_time_ms": 15.942212907167582,
+      "avg_confidence": 0.8394169807434082,
+      "detection_rate_pct": 93.4,
+      "memory_peak_mb": 99.6190625,
+      "total_frames_aggregated": 3985
+    },
+    "yolo": {
+      "avg_fps": 8.479665535651236,
+      "avg_inference_time_ms": 536.8479418027305,
+      "avg_confidence": 0.8020406365394592,
+      "detection_rate_pct": 98.8126921387791,
+      "memory_peak_mb": 226.1834375,
+      "total_frames_aggregated": 3790
+    },
+    "detrpose": {
+      "avg_fps": 6.121798214873304,
+      "avg_inference_time_ms": 398.25267351590674,
+      "avg_confidence": 0.6740477085113525,
+      "detection_rate_pct": 88.92307692307692,
+      "memory_peak_mb": 217.0696875,
+      "total_frames_aggregated": 3985
+    },
+    "vitpose": {
+      "avg_fps": 4.825264980737471,
+      "avg_inference_time_ms": 295.8669444414286,
+      "avg_confidence": 0.710493803024292,
+      "detection_rate_pct": 91.125,
+      "memory_peak_mb": 224.8928125,
+      "total_frames_aggregated": 3985
+    },
+    "rtmpose_x": {
+      "avg_fps": 1.2478811777110534,
+      "avg_inference_time_ms": 938.7018398184042,
+      "avg_confidence": 0.7615514397621155,
+      "detection_rate_pct": 94.125,
+      "memory_peak_mb": 338.233125,
+      "total_frames_aggregated": 3985
+    }
+  },
+  "recommendations": {
+    "fastest_fps": "MediaPipe",
+    "lowest_latency_ms": "MediaPipe",
+    "best_confidence": "MediaPipe",
+    "best_detection_rate": "YOLOv8-Pose",
+    "balanced_score": "MediaPipe"
+  }
+}

@@ -1,10 +1,8 @@
 {
   "class_to_idx": {
-    "barbell biceps curl": 0,
-    "hammer curl": 1
+    "pseudo_2": 0
   },
   "idx_to_class": {
-    "0": "barbell biceps curl",
-    "1": "hammer curl"
+    "0": "pseudo_2"
   }
 }

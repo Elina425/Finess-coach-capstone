@@ -42,6 +42,9 @@ ijson>=3.2.0
 # Optional: Kaggle datasets (e.g. gym IMU CSV pipeline)
 # kagglehub>=0.2.0
 
+# Optional: Hugging Face gated datasets (e.g. EgoExo-Fitness index + download)
+huggingface_hub>=0.20.0
+
 # Optional: GPU acceleration
 # For NVIDIA GPU support (install one of these)
 # tensorflow[and-cuda]>=2.8.0  # For TensorFlow backend
