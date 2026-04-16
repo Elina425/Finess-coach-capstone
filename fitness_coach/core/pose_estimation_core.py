@@ -127,13 +127,26 @@ def _pad_hw_to_multiple(rgb: np.ndarray, multiple: int = 32) -> np.ndarray:
 
 class MediaPipeDetector:
     """MediaPipe BlazePose detector - real skeleton detection"""
-    
-    def __init__(self):
+
+    def __init__(
+        self,
+        *,
+        model_complexity: int = 1,
+        smooth_landmarks: bool = True,
+        min_detection_confidence: float = 0.5,
+        min_tracking_confidence: float = 0.5,
+        quiet: bool = False,
+    ):
         self.available = True
         self.detector = None
         self._ready = False
+        self.model_complexity = int(max(0, min(2, model_complexity)))
+        self.smooth_landmarks = bool(smooth_landmarks)
+        self.min_detection_confidence = float(min_detection_confidence)
+        self.min_tracking_confidence = float(min_tracking_confidence)
+        self.quiet = bool(quiet)
         self._init_pose_detector()
-    
+
     def _init_pose_detector(self):
         """Initialize MediaPipe Pose detection"""
         if self._ready:
@@ -143,24 +156,27 @@ class MediaPipeDetector:
             from mediapipe import solutions
             self.mp_pose = solutions.pose.Pose(
                 static_image_mode=False,
-                model_complexity=1,
-                smooth_landmarks=True,
-                min_detection_confidence=0.5,
-                min_tracking_confidence=0.5
+                model_complexity=self.model_complexity,
+                smooth_landmarks=self.smooth_landmarks,
+                min_detection_confidence=self.min_detection_confidence,
+                min_tracking_confidence=self.min_tracking_confidence,
             )
             self._ready = True
-            print("✓ MediaPipe Pose detector initialized successfully (solutions API)")
+            if not self.quiet:
+                print("✓ MediaPipe Pose detector initialized successfully (solutions API)")
             return True
         except ImportError:
             pass
         except Exception as e:
-            print(f"⚠️  MediaPipe solutions API error: {e}")
+            if not self.quiet:
+                print(f"⚠️  MediaPipe solutions API error: {e}")
         try:
             self._init_tasks_api()
             return True
         except Exception as e2:
-            print(f"⚠️  MediaPipe Tasks API failed: {e2}")
-            print("  Will use synthetic skeleton generation as fallback")
+            if not self.quiet:
+                print(f"⚠️  MediaPipe Tasks API failed: {e2}")
+                print("  Will use synthetic skeleton generation as fallback")
             self.available = False
             return False
     
@@ -189,7 +205,8 @@ class MediaPipeDetector:
                 )
                 self.tasks_detector = vision.PoseLandmarker.create_from_options(options)
                 self._use_tasks = True
-                print(f"✓ MediaPipe tasks API initialized with model: {model_path}")
+                if not self.quiet:
+                    print(f"✓ MediaPipe tasks API initialized with model: {model_path}")
                 self._ready = True
                 return True
             else:
@@ -217,7 +234,8 @@ class MediaPipeDetector:
                 package_path / "modules" / "pose_landmark" / "pose_landmarker_lite.task",
             ):
                 if path.exists():
-                    print(f"Found bundled model: {path}")
+                    if not self.quiet:
+                        print(f"Found bundled model: {path}")
                     return str(path)
         except Exception:
             pass
@@ -230,10 +248,12 @@ class MediaPipeDetector:
         try:
             print(f"Downloading MediaPipe pose model to {dest}...")
             urllib.request.urlretrieve(url, dest)
-            print("✓ Model download complete")
+            if not self.quiet:
+                print("✓ Model download complete")
             return str(dest)
         except Exception as e:
-            print(f"⚠️  Could not download pose model (need network): {e}")
+            if not self.quiet:
+                print(f"⚠️  Could not download pose model (need network): {e}")
             return None
     
     def detect(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
@@ -1307,7 +1327,7 @@ def apply_keypoint_preprocessing_pipeline(
 
 class VideoProcessor:
     """Process video files and extract poses"""
-    
+
     def __init__(self, video_path: str):
         self.video_path = video_path
         self.cap = cv2.VideoCapture(video_path)
@@ -1315,40 +1335,73 @@ class VideoProcessor:
         self.total_frames = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    
-    def process_with_detector(self, detector, max_frames: Optional[int] = None) -> List[PoseEstimationResult]:
-        """Process video and extract poses"""
-        results = []
+
+    @staticmethod
+    def _downscale_for_detection(frame: np.ndarray, max_long_edge: int) -> np.ndarray:
+        """Resize so max(h, w) <= max_long_edge; keeps aspect ratio. max_long_edge<=0 = no-op."""
+        if max_long_edge <= 0:
+            return frame
+        h, w = frame.shape[:2]
+        m = max(h, w)
+        if m <= max_long_edge:
+            return frame
+        scale = max_long_edge / float(m)
+        nw, nh = max(1, int(round(w * scale))), max(1, int(round(h * scale)))
+        return cv2.resize(frame, (nw, nh), interpolation=cv2.INTER_AREA)
+
+    def process_with_detector(
+        self,
+        detector,
+        max_frames: Optional[int] = None,
+        *,
+        detection_stride: int = 1,
+        detection_max_long_edge: int = 0,
+    ) -> List[PoseEstimationResult]:
+        """Process video and extract poses.
+
+        ``detection_stride``: run MediaPipe every Nth frame (e.g. 2 ≈ half the work; pair with
+        effective FPS when preprocessing). ``detection_max_long_edge``: shrink frames before
+        inference (landmarks mapped back to full-res pixels).
+        """
+        results: List[PoseEstimationResult] = []
         frame_idx = 0
-        
+        stride = max(1, int(detection_stride))
+
         while True:
             ret, frame = self.cap.read()
             if not ret:
                 break
-            
+
             if max_frames and frame_idx >= max_frames:
                 break
-            
+
+            if frame_idx % stride != 0:
+                frame_idx += 1
+                continue
+
+            det_frame = self._downscale_for_detection(frame, int(detection_max_long_edge))
+
             start_time = time.time()
-            keypoints, confidence = detector.detect(frame)
+            keypoints, confidence = detector.detect(det_frame)
             inference_time = (time.time() - start_time) * 1000  # ms
-            
+
             if keypoints is not None:
-                # Normalize to pixel coordinates
-                keypoints[:, 0] *= self.width
-                keypoints[:, 1] *= self.height
-                
+                # Normalized coords are relative to det_frame; map to full-video pixels
+                keypoints = keypoints.copy()
+                keypoints[:, 0] *= float(self.width)
+                keypoints[:, 1] *= float(self.height)
+
                 result = PoseEstimationResult(
                     model_name=detector.__class__.__name__,
                     frame_idx=frame_idx,
                     keypoints=keypoints,
                     confidence=confidence,
-                    inference_time=inference_time
+                    inference_time=inference_time,
                 )
                 results.append(result)
-            
+
             frame_idx += 1
-        
+
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset
         return results
     

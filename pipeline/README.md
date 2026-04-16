@@ -34,13 +34,16 @@ Steps **2–5** (`step_02_pose_comparison.sh` … `step_05_train_bilstm_riccio.s
 | `KAGGLEHUB_CACHE` | `$HOME/.cache/kagglehub` when unset |
 | `RICCIO_MP_MAX_WORKERS` | Cap when `--workers 0` (default `8`) |
 | `RICCIO_MP_WORKERS` | If set to a positive integer, used when `--workers 0` instead of auto CPU count |
+| `RICCIO_USE_RICH_PREPROCESS` | `1` (default): `step_03_04_riccio_videos_to_angles.sh` adds `--rich-preprocess` (Laplacian + bone + DWT + Savitzky–Golay on top of norm/impute/FPS). Set `0` for baseline `normalization` + `imputation` + `fps_sync` only |
+| `RICCIO_MAX_VIDEOS` | `0` (default): no cap. Set e.g. `400` to pass `--max-videos 400` from the step 3–4 shell wrapper |
 
-Extra CLI args appended to the shell scripts are forwarded last, so e.g. `--dataset-root /other` overrides earlier defaults where argparse allows.
+Extra CLI args appended to the shell scripts are forwarded last, so e.g. `--dataset-root /other` or a second `--max-videos` wins over env-driven flags where argparse accepts the last value.
 
 **Full Riccio path (minimal):** after setup and dataset available (see below), from repo root:
 
 ```bash
 ./pipeline/step_02_pose_comparison.sh --num-videos 5 --output-dir results/02_pose_comparison
+# Step 3–4 defaults (via riccio_env.sh): --rich-preprocess; optional RICCIO_MAX_VIDEOS for a subset
 ./pipeline/step_03_04_riccio_videos_to_angles.sh --workers 6 --skip-keypoints
 ./pipeline/step_05_train_bilstm_riccio.sh
 ```
@@ -83,15 +86,26 @@ Pipeline order is implemented in `apply_keypoint_preprocessing_pipeline` (`fitne
 |------|----------|--------|
 | **Spatial imputation** | Yes | Low-confidence joints filled (COCO **neighbor** mean; **not** Laplacian unless `--laplacian-spatial`) |
 | **Skeleton–torso normalization** | Yes | Hip-centered, torso-length scale (2D scale / distance) |
-| **Bone proportion** | No | `--bone-proportion` — BioPose-style limb ratios after norm |
+| **Bone proportion** | With `--rich-preprocess` | `--bone-proportion` — BioPose-style limb ratios after norm |
 | **Temporal imputation** | Yes | Linear interpolation along time for flickering joints |
 | **FPS sync** | Yes | Resample to `--target-fps` (default 30) unless `--no-fps-sync` |
-| **Savitzky–Golay / Kalman** | No | `--savgol` or `--kalman` (mutually exclusive) |
-| **DWT** | No | `--dwt` (PyWavelets) |
+| **Savitzky–Golay / Kalman** | With `--rich-preprocess` (SG) | `--savgol` or `--kalman` (mutually exclusive) |
+| **DWT** | With `--rich-preprocess` | `--dwt` (PyWavelets) |
+| **Laplacian spatial** | With `--rich-preprocess` | `--laplacian-spatial` |
 
-**Default technique list** (no extra flags): `normalization`, `imputation`, `fps_sync` — **no** Laplacian, bone, DWT, or Savitzky–Golay.
+**`python riccio_kaggle_video_pipeline.py` alone** (no flags): technique list `normalization`, `imputation`, `fps_sync` only.
+
+**`./pipeline/step_03_04_riccio_videos_to_angles.sh`** (after sourcing `riccio_env.sh`): adds **`--rich-preprocess` by default** (`RICCIO_USE_RICH_PREPROCESS=1`), i.e. `--laplacian-spatial --bone-proportion --dwt --savgol` on top of the baseline trio. Set `RICCIO_USE_RICH_PREPROCESS=0` to match the minimal Python default.
 
 **`--rich-preprocess`** is a shortcut for: `--laplacian-spatial --bone-proportion --dwt --savgol`.
+
+**MediaPipe speed (CPU-bound; Colab GPU does not accelerate this step):**
+
+- `--mediapipe-fast` — sets model complexity **0**, disables landmark smoothing (solutions API), and uses `--detection-max-long-edge 480` unless you already set a positive edge.
+- `--detection-max-long-edge N` — shrink frames before inference; landmarks are mapped back to full resolution.
+- `--detection-stride N` — run pose on every *N*th frame only; preprocessing uses an effective source FPS so resampling to `--target-fps` stays consistent.
+- `--skip-keypoints` — skip writing large `*_keypoints.npz` when you only need angles / BiLSTM.
+- Fewer parallel workers (`--workers` or lower `RICCIO_MP_MAX_WORKERS`) if RAM is tight.
 
 **Ablations (e.g. classification hurt by DWT):** use the wrappers (same env as step 3–4):
 
@@ -286,7 +300,8 @@ Then either run `step_06_train_bilstm_egoexo.sh` or repeat split / angles / `tra
 
 ## 7. Google Colab (GPU for step 5)
 
-- **Riccio / Kaggle NPZs:** [`notebooks/colab_gpu_training.ipynb`](../notebooks/colab_gpu_training.ipynb) — point `KAGGLE_DIR` at NPZs from steps 3–4, run `train_exercise_bilstm.py`.
+- **Riccio / Kaggle (full path):** [`notebooks/colab_kaggle_capstone_pipeline.ipynb`](../notebooks/colab_kaggle_capstone_pipeline.ipynb) — Kaggle API secrets, `kagglehub` download, `riccio_kaggle_video_pipeline.py`, BiLSTM + optional ST-GCN, Drive for outputs.
+- **Riccio / Kaggle (minimal):** [`notebooks/colab_gpu_training.ipynb`](../notebooks/colab_gpu_training.ipynb) — point `KAGGLE_DIR` at NPZs from steps 3–4, train BiLSTM only.
 - **EgoExo end-to-end (rubric 1–8 outline):** [`notebooks/colab_egoexo_capstone_pipeline.ipynb`](../notebooks/colab_egoexo_capstone_pipeline.ipynb) — Drive + `HF_TOKEN`, annotations download, index/split, annotation BiLSTM, optional pose track when frames exist on Drive.
 
 ---

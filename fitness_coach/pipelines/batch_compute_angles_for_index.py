@@ -78,6 +78,11 @@ def angles_and_keypoints_from_video(
     kalman_process_noise: float = 1e-4,
     kalman_measurement_noise: float = 1e-2,
     return_keypoints: bool = True,
+    mediapipe_model_complexity: int = 1,
+    mediapipe_smooth_landmarks: bool = True,
+    mediapipe_quiet: bool = False,
+    detection_stride: int = 1,
+    detection_max_long_edge: int = 0,
 ) -> tuple[np.ndarray, np.ndarray | None] | None:
     """
     One MediaPipe pass → (angles (T,8), keypoints (T,17,2)).
@@ -89,13 +94,25 @@ def angles_and_keypoints_from_video(
     If ``return_keypoints=False``, the second return value is ``None`` (saves memory; use with
     BiLSTM-only pipelines and ``--skip-keypoints``).
     """
-    det = MediaPipeDetector()
+    det = MediaPipeDetector(
+        model_complexity=int(mediapipe_model_complexity),
+        smooth_landmarks=bool(mediapipe_smooth_landmarks),
+        quiet=bool(mediapipe_quiet),
+    )
     if not getattr(det, "available", True):
         print("MediaPipe unavailable", file=sys.stderr)
         return None
     vp = VideoProcessor(str(video_path))
-    pose_results = vp.process_with_detector(det, max_frames=max_frames)
+    stride = max(1, int(detection_stride))
+    pose_results = vp.process_with_detector(
+        det,
+        max_frames=max_frames,
+        detection_stride=stride,
+        detection_max_long_edge=int(detection_max_long_edge),
+    )
     measured_fps = float(vp.fps) if vp.fps and vp.fps > 1e-3 else 30.0
+    if stride > 1:
+        measured_fps = measured_fps / float(stride)
     vp.close()
     if not pose_results:
         return None
@@ -157,6 +174,11 @@ def riccio_parallel_video_job(job: dict) -> dict:
         kalman_process_noise=float(job["kalman_process_noise"]),
         kalman_measurement_noise=float(job["kalman_measurement_noise"]),
         return_keypoints=not skip_keypoints,
+        mediapipe_model_complexity=int(job.get("mediapipe_model_complexity", 1)),
+        mediapipe_smooth_landmarks=bool(job.get("mediapipe_smooth_landmarks", True)),
+        mediapipe_quiet=bool(job.get("mediapipe_quiet", True)),
+        detection_stride=int(job.get("detection_stride", 1)),
+        detection_max_long_edge=int(job.get("detection_max_long_edge", 0)),
     )
     if both is None:
         return {"index": idx, "ok": False, "exercise_class": cls, "source": str(vp)}

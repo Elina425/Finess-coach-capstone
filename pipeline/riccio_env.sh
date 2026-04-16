@@ -16,6 +16,11 @@ export EXERCISE_BILSTM_OUT="${EXERCISE_BILSTM_OUT:-$RICCIO_REPO_ROOT/results/exe
 # export RICCIO_MP_WORKERS=4
 export RICCIO_MP_MAX_WORKERS="${RICCIO_MP_MAX_WORKERS:-8}"
 
+# Step 3–4 preprocessing: 1 = pass --rich-preprocess (Laplacian + bone proportion + DWT + Savitzky–Golay on top of norm/impute/FPS). Set 0 for baseline only.
+export RICCIO_USE_RICH_PREPROCESS="${RICCIO_USE_RICH_PREPROCESS:-1}"
+# Optional cap on videos (0 or unset = no --max-videos; process all). Example for Colab-style subset: export RICCIO_MAX_VIDEOS=400
+export RICCIO_MAX_VIDEOS="${RICCIO_MAX_VIDEOS:-0}"
+
 # Video dataset root: user-set or newest kagglehub version that looks like Riccio layout
 if [[ -z "${EXERCISE_RECOGNITION_ROOT:-}" ]]; then
   _vbase="${KAGGLEHUB_CACHE:-$HOME/.cache/kagglehub}/datasets/riccardoriccio/real-time-exercise-recognition-dataset/versions"

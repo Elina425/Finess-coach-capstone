@@ -202,6 +202,11 @@ def run_riccio_video_to_npz(
     kalman_process_noise: float = 1e-4,
     kalman_measurement_noise: float = 1e-2,
     num_workers: int = 0,
+    mediapipe_model_complexity: int = 1,
+    mediapipe_smooth_landmarks: bool = True,
+    mediapipe_quiet: bool = True,
+    detection_stride: int = 1,
+    detection_max_long_edge: int = 0,
 ) -> Dict[str, Any]:
     vids = iter_riccio_videos(dataset_root, subsets)
     if not vids:
@@ -236,6 +241,11 @@ def run_riccio_video_to_npz(
                 "savgol_polyorder": int(savgol_polyorder),
                 "kalman_process_noise": float(kalman_process_noise),
                 "kalman_measurement_noise": float(kalman_measurement_noise),
+                "mediapipe_model_complexity": int(mediapipe_model_complexity),
+                "mediapipe_smooth_landmarks": bool(mediapipe_smooth_landmarks),
+                "mediapipe_quiet": bool(mediapipe_quiet),
+                "detection_stride": int(detection_stride),
+                "detection_max_long_edge": int(detection_max_long_edge),
             }
         )
 
@@ -319,6 +329,10 @@ def run_riccio_video_to_npz(
         "num_distinct_videos": int(np.max(video_id_all) + 1) if video_id_all.size else 0,
         "labels_include_video_id": True,
         "num_workers": int(nw),
+        "mediapipe_model_complexity": int(mediapipe_model_complexity),
+        "mediapipe_smooth_landmarks": bool(mediapipe_smooth_landmarks),
+        "detection_stride": int(detection_stride),
+        "detection_max_long_edge": int(detection_max_long_edge),
         "preprocessing": (
             "raw_pixel_xy"
             if raw_keypoints
@@ -425,7 +439,43 @@ def main() -> int:
         action="store_true",
         help="Shortcut: enable --laplacian-spatial, --bone-proportion, --dwt, and --savgol (full §3 extras).",
     )
+    ap.add_argument(
+        "--mediapipe-model-complexity",
+        type=int,
+        choices=(0, 1, 2),
+        default=1,
+        help="BlazePose solutions API only: 0=fastest, 1=default balance, 2=heaviest (ignored by tasks API).",
+    )
+    ap.add_argument(
+        "--mediapipe-no-smooth-landmarks",
+        action="store_true",
+        help="Disable temporal landmark smoothing (solutions API only; slightly faster).",
+    )
+    ap.add_argument(
+        "--mediapipe-fast",
+        action="store_true",
+        help="Shorthand: --mediapipe-model-complexity 0, --mediapipe-no-smooth-landmarks, and "
+        "--detection-max-long-edge 480 if not already set (big Colab speedup).",
+    )
+    ap.add_argument(
+        "--detection-stride",
+        type=int,
+        default=1,
+        help="Run pose on every Nth frame (e.g. 2 ≈ 2× fewer detections; FPS preprocessing uses effective rate).",
+    )
+    ap.add_argument(
+        "--detection-max-long-edge",
+        type=int,
+        default=0,
+        help="If >0, downscale frames so max(h,w)<=this before MediaPipe (faster); landmarks mapped to full resolution.",
+    )
     args = ap.parse_args()
+
+    if args.mediapipe_fast:
+        args.mediapipe_model_complexity = 0
+        args.mediapipe_no_smooth_landmarks = True
+        if int(args.detection_max_long_edge) <= 0:
+            args.detection_max_long_edge = 480
 
     if args.rich_preprocess:
         args.laplacian_spatial = True
@@ -488,6 +538,11 @@ def main() -> int:
             kalman_process_noise=args.kalman_q,
             kalman_measurement_noise=args.kalman_r,
             num_workers=args.workers,
+            mediapipe_model_complexity=int(args.mediapipe_model_complexity),
+            mediapipe_smooth_landmarks=not bool(args.mediapipe_no_smooth_landmarks),
+            mediapipe_quiet=True,
+            detection_stride=max(1, int(args.detection_stride)),
+            detection_max_long_edge=max(0, int(args.detection_max_long_edge)),
         )
     except (FileNotFoundError, RuntimeError) as e:
         print(f"✗ {e}", file=sys.stderr)
