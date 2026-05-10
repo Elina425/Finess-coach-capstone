@@ -72,3 +72,52 @@ Thumbs.db
 .vscode/
 *.swp
 *~
+
+# --- Mediapipe / model files (large binaries, downloadable) ---
+*.task
+*.tflite
+
+# --- Logs ---
+*.log
+*.log.*
+
+# --- Cache directories ---
+.mplcache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# --- Image artifacts (training visualizations are regenerable) ---
+# Block by default; whitelist intentional documentation images below.
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+!docs/**/*.png
+!docs/**/*.jpg
+!docs/**/*.jpeg
+!docs/**/*.svg
+!**/img/**
+
+# --- Training outputs and dataset directories (all regenerable) ---
+results/
+videos_squat/
+mediapipe_models/
+notebooks/mediapipe_models/
+notebooks/data/
+data/EgoExo-Fitness/features_open/
+data/EgoExo-Fitness/frames_open/
+
+# --- Misplaced raw clips inside the Python package (move to data/raw_clips/) ---
+fitness_coach/datasets/squat/
+fitness_coach/datasets/shoulder/
+
+# --- Claude Code worktrees / scratch (never track) ---
+.claude/worktrees/
+.claude/projects/
+
+# --- Local data caches (downloaded datasets) ---
+data/raw_clips/
+data/cache/
