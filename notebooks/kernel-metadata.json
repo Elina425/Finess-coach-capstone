@@ -1,0 +1,16 @@
+{
+  "id": "elinamelkonyan/posepulse-paper-classification",
+  "title": "PosePulse Paper Classification",
+  "code_file": "kaggle_paper_classification.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_internet": "true",
+  "dataset_sources": [
+    "elinamelkonyan/riccio-vit256-features",
+    "elinamelkonyan/posepulse-source"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}
