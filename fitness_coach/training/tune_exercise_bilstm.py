@@ -218,6 +218,9 @@ def main() -> int:
                 cnn_hidden=cnn_h,
                 attn_heads=attn_h,
                 ce_class_weights=ce_w,
+                optimizer_kind=str(getattr(args, "optimizer", "adamw")),
+                dora_head_rank=int(getattr(args, "dora_head_rank", 0) or 0),
+                dora_head_alpha=float(getattr(args, "dora_head_alpha", 8.0) or 8.0),
             )
         except TrialPruned:
             raise
@@ -274,6 +277,9 @@ def main() -> int:
         cnn_hidden=cnn_h,
         attn_heads=attn_h,
         ce_class_weights=ce_w,
+        optimizer_kind=str(getattr(args, "optimizer", "adamw")),
+        dora_head_rank=int(getattr(args, "dora_head_rank", 0) or 0),
+        dora_head_alpha=float(getattr(args, "dora_head_alpha", 8.0) or 8.0),
     )
     ckpt_path = out_dir / "exercise_bilstm_best.pt"
     print(f"Retrained best model: val acc ≈ {res['best_val_acc']:.4f}; checkpoint: {ckpt_path}")

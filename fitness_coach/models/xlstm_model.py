@@ -20,11 +20,24 @@ The public `xLSTMExerciseClassifier` API stays compatible with the repo's existi
 from __future__ import annotations
 
 import math
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
+
+def _bucket_interval_centres(
+    bucket_edges: Tuple[float, ...],
+    *,
+    domain_lo: float = 0.0,
+    domain_hi: float = 1.0,
+) -> Tuple[float, ...]:
+    """Midpoints of buckets cut into ``[domain_lo, domain_hi]`` by ``bucket_edges``."""
+    edges = tuple(float(e) for e in bucket_edges)
+    dl, dh = float(domain_lo), float(domain_hi)
+    cuts = [dl] + list(edges) + [dh]
+    return tuple(0.5 * (cuts[i] + cuts[i + 1]) for i in range(len(cuts) - 1))
 
 
 def _resolve_num_heads(hidden_size: int, requested_heads: int) -> int:
@@ -389,13 +402,21 @@ class xLSTM(nn.Module):
 
 
 class MultiTaskFusion(nn.Module):
-    """Two PLN → Linear branches summed before the per-task heads.
+    """Two PLN → Linear branches with task-specific routing.
 
-    This realises the additive fusion the instructor sketched on the whiteboard
-    (the ``+`` box between the two PLN→Linear branches). Each branch is a
-    LayerNorm → Linear → GELU stack — same shape, different weights — so they
-    can specialise during training; the sum produces the shared task-tower
-    representation that feeds both the classification and quality heads.
+    Realises the whiteboard architecture: Branch A is the *only* path to the
+    classification head and Branch B is the *only* path to the quality head, so
+    each branch is forced to specialise on its task by virtue of gradient flow.
+    The sum ``z = a + b`` carries both specialised signals and is fed to the
+    comment head — giving the language model access to the class-discriminative
+    and quality-discriminative information that the two branches just extracted.
+
+    ``forward`` returns the triple ``(a, b, z)`` so the caller can route each
+    output to the appropriate head:
+
+        a → classification head
+        b → quality head
+        z → comment head
     """
 
     def __init__(self, in_dim: int, out_dim: int, dropout: float = 0.1):
@@ -409,8 +430,11 @@ class MultiTaskFusion(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.out_dim = int(out_dim)
 
-    def forward(self, pooled: torch.Tensor) -> torch.Tensor:
-        return self.dropout(self.branch_a(pooled) + self.branch_b(pooled))
+    def forward(self, pooled: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        a = self.branch_a(pooled)
+        b = self.branch_b(pooled)
+        z = self.dropout(a + b)
+        return a, b, z
 
 
 class AttentionPooling(nn.Module):
@@ -619,6 +643,384 @@ class CommentGenerationHead(nn.Module):
         return self.tokenizer.batch_decode(gen, skip_special_tokens=True)
 
 
+class BranchedFusionT5CommentHead(nn.Module):
+    """Branched-fusion comment path with a **frozen Flan-T5** encoder-decoder.
+
+    Mirrors ``ClassConditionedCommentHead`` at the API level (consumes fused ``z``, short
+    class-only coach prompts + soft prefix) but uses ``T5ForConditionalGeneration`` so
+    ``--lm-name google/flan-t5-*`` works with ``--class-conditioned-comment``. Causal
+    LMs remain on ``ClassConditionedCommentHead`` (e.g. Gemma).
+    """
+
+    def __init__(
+        self,
+        encoder_dim: int,
+        model_name: str = "google/flan-t5-small",
+        n_prefix_tokens: int = 16,
+        max_target_len: int = 48,
+        max_prompt_len: int = 96,
+    ):
+        super().__init__()
+        try:
+            from transformers import T5ForConditionalGeneration, T5Tokenizer  # type: ignore
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "BranchedFusionT5CommentHead requires `transformers` and `sentencepiece`. "
+                "Install with: pip install 'transformers>=4.30' sentencepiece"
+            ) from exc
+
+        self.tokenizer = T5Tokenizer.from_pretrained(model_name)
+        self.lm = T5ForConditionalGeneration.from_pretrained(model_name)
+        for p in self.lm.parameters():
+            p.requires_grad_(False)
+        self.lm.eval()
+
+        self.d_model = int(self.lm.config.d_model)
+        self.n_prefix = int(n_prefix_tokens)
+        self.max_target_len = int(max_target_len)
+        self.max_prompt_len = int(max_prompt_len)
+        self.model_name = str(model_name)
+
+        self.prefix_proj = nn.Sequential(
+            nn.LayerNorm(int(encoder_dim)),
+            nn.Linear(int(encoder_dim), self.n_prefix * self.d_model),
+        )
+
+    def train(self, mode: bool = True):  # type: ignore[override]
+        super().train(mode)
+        self.lm.eval()
+        return self
+
+    def parameters(self, recurse: bool = True):
+        return self.prefix_proj.parameters(recurse=recurse)
+
+    @staticmethod
+    def _build_prompts(class_names: Sequence[str]) -> List[str]:
+        prompts: List[str] = []
+        for n in class_names:
+            cls = (n or "exercise").strip().lower() or "exercise"
+            prompts.append(
+                f"You are a fitness coach. The athlete just performed "
+                f'"{cls}". Write one short corrective coaching tip for their form:'
+            )
+        return prompts
+
+    def _tokenize(self, texts: Sequence[str], max_length: int, device: torch.device):
+        enc = self.tokenizer(
+            list(texts),
+            padding=True,
+            truncation=True,
+            max_length=max_length,
+            return_tensors="pt",
+        )
+        return enc["input_ids"].to(device), enc["attention_mask"].to(device)
+
+    def _encoder_inputs(
+        self, pooled_emb: torch.Tensor, prompts: Sequence[str]
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        device = pooled_emb.device
+        b = pooled_emb.size(0)
+        prompt_ids, prompt_mask = self._tokenize(prompts, self.max_prompt_len, device)
+        with torch.no_grad():
+            prompt_emb = self.lm.get_input_embeddings()(prompt_ids)
+        soft = self.prefix_proj(pooled_emb).view(b, self.n_prefix, self.d_model)
+        inputs_embeds = torch.cat([soft, prompt_emb], dim=1)
+        soft_mask = torch.ones(b, self.n_prefix, dtype=prompt_mask.dtype, device=device)
+        attn_mask = torch.cat([soft_mask, prompt_mask], dim=1)
+        return inputs_embeds, attn_mask
+
+    def compute_loss(
+        self,
+        pooled_emb: torch.Tensor,
+        class_indices: torch.Tensor,
+        class_names: Sequence[str],
+        target_comments: Sequence[str],
+    ) -> torch.Tensor:
+        """Teacher-forced cross-entropy; ``class_indices`` unused (matches causal-head API).
+
+        Prompts use **gold** class names per batch sample (CSV), same rationale as ``ClassConditionedCommentHead``.
+        """
+        del class_indices
+        device = pooled_emb.device
+        keep = [i for i, c in enumerate(target_comments) if c and c.strip()]
+        if not keep:
+            return pooled_emb.new_zeros(())
+        if len(keep) != pooled_emb.size(0):
+            pooled_emb = pooled_emb[keep]
+            class_names = [class_names[i] for i in keep]
+            target_comments = [target_comments[i] for i in keep]
+
+        prompts = self._build_prompts(class_names)
+        inputs_embeds, attn_mask = self._encoder_inputs(pooled_emb, prompts)
+        target_ids, _ = self._tokenize(list(target_comments), self.max_target_len, device)
+        labels = target_ids.clone()
+        labels[labels == self.tokenizer.pad_token_id] = -100
+        out = self.lm(inputs_embeds=inputs_embeds, attention_mask=attn_mask, labels=labels)
+        return out.loss
+
+    @torch.no_grad()
+    def generate(
+        self,
+        pooled_emb: torch.Tensor,
+        predicted_class_indices: torch.Tensor,
+        class_names: Sequence[str],
+        num_beams: int = 4,
+    ) -> List[str]:
+        del predicted_class_indices
+        prompts = self._build_prompts(class_names)
+        inputs_embeds, attn_mask = self._encoder_inputs(pooled_emb, prompts)
+        gen = self.lm.generate(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attn_mask,
+            max_new_tokens=self.max_target_len,
+            num_beams=num_beams,
+            no_repeat_ngram_size=3,
+            early_stopping=True,
+        )
+        return self.tokenizer.batch_decode(gen, skip_special_tokens=True)
+
+
+class ClassConditionedCommentHead(nn.Module):
+    """Coaching-comment head with frozen decoder-only LM (Gemma-2-2B default).
+
+    Consumes the fused vector ``z = a + b`` produced by the branched
+    ``MultiTaskFusion`` tower (Branch A specialises on classification,
+    Branch B on quality). Because each branch is the only direct path to its
+    respective task head, gradient flow forces the branches to specialise on
+    different features — and ``z`` then carries both class-discriminative and
+    quality-discriminative signals into the comment head implicitly. No explicit
+    class-embedding lookup is required at the comment-head input.
+
+    The optional ``class_emb_dim > 0`` argument is kept for the legacy
+    "explicit class conditioning" variant (where ``c = E_cls[ŷ]`` is
+    concatenated to the fused vector before the soft-prefix projection).
+    Set ``class_emb_dim=0`` to use the pure branched-fusion design.
+
+    Trainable: only the optional class-embedding table ``E_cls`` and the
+    soft-prefix projection ``W_p``. All LM weights stay frozen.
+    """
+
+    def __init__(
+        self,
+        encoder_dim: int,
+        num_classes: int,
+        class_emb_dim: int = 0,
+        model_name: str = "google/gemma-2-2b",
+        n_prefix_tokens: int = 16,
+        max_target_len: int = 64,
+        max_prompt_len: int = 96,
+        hf_token: Optional[str] = None,
+        device_map: Optional[str] = None,
+    ):
+        super().__init__()
+        try:
+            from transformers import AutoTokenizer, AutoModelForCausalLM  # type: ignore
+        except ImportError as exc:  # pragma: no cover
+            raise ImportError(
+                "ClassConditionedCommentHead requires `transformers>=4.42`. "
+                "Install with: pip install 'transformers>=4.42' accelerate sentencepiece"
+            ) from exc
+
+        kwargs: Dict[str, Any] = {}
+        if hf_token:
+            kwargs["token"] = hf_token
+        if device_map:
+            kwargs["device_map"] = device_map
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name, **kwargs)
+        # decoder-only causal LM (Gemma, Llama, Qwen, Phi, etc.)
+        self.lm = AutoModelForCausalLM.from_pretrained(model_name, **kwargs)
+        for p in self.lm.parameters():
+            p.requires_grad_(False)
+        self.lm.eval()
+
+        # Ensure a pad token exists (some causal LMs ship without one).
+        if self.tokenizer.pad_token_id is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        self.d_model = int(getattr(self.lm.config, "hidden_size", None)
+                           or getattr(self.lm.config, "d_model", None))
+        if self.d_model is None:
+            raise ValueError(f"Could not infer hidden_size from {model_name} config.")
+
+        self.n_prefix = int(n_prefix_tokens)
+        self.max_target_len = int(max_target_len)
+        self.max_prompt_len = int(max_prompt_len)
+        self.num_classes = int(num_classes)
+        self.class_emb_dim = int(class_emb_dim)
+        self.model_name = model_name
+
+        # Trainable components.
+        # In the branched-fusion design class_emb_dim=0 — Branch A already
+        # delivers the class signal via z = a + b. The explicit class
+        # embedding is only used when class_emb_dim > 0 (legacy variant).
+        if self.class_emb_dim > 0:
+            self.class_embeddings = nn.Embedding(self.num_classes, self.class_emb_dim)
+        else:
+            self.class_embeddings = None
+        proj_in_dim = encoder_dim + self.class_emb_dim
+        self.prefix_proj = nn.Sequential(
+            nn.LayerNorm(proj_in_dim),
+            nn.Linear(proj_in_dim, self.n_prefix * self.d_model),
+        )
+
+    def train(self, mode: bool = True):  # type: ignore[override]
+        super().train(mode)
+        self.lm.eval()  # keep frozen LM in eval (no dropout)
+        return self
+
+    def parameters(self, recurse: bool = True):
+        # Optimiser-facing iterator — only trainable params.
+        if self.class_embeddings is not None:
+            yield from self.class_embeddings.parameters(recurse=recurse)
+        yield from self.prefix_proj.parameters(recurse=recurse)
+
+    # ------------------------------------------------------------------ helpers
+
+    def _class_names_to_indices(
+        self, class_names: Sequence[str], class_to_idx: Dict[str, int]
+    ) -> torch.Tensor:
+        return torch.tensor(
+            [class_to_idx.get((n or "").strip().lower(), 0) for n in class_names],
+            dtype=torch.long,
+        )
+
+    def _build_prompts(self, class_names: Sequence[str]) -> List[str]:
+        """Build per-sample text prompt that pairs with the soft prefix."""
+        prompts: List[str] = []
+        for n in class_names:
+            cls = (n or "exercise").strip().lower() or "exercise"
+            prompts.append(
+                f"You are a fitness coach. The athlete just performed "
+                f"\"{cls}\". Write one short corrective coaching tip for their form:"
+            )
+        return prompts
+
+    def _build_inputs_embeds(
+        self,
+        pooled_emb: torch.Tensor,
+        class_indices: torch.Tensor,
+        prompts: Sequence[str],
+        target_ids: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor, Optional[torch.Tensor]]:
+        """Return (inputs_embeds, attention_mask, labels-for-causal-LM-or-None)."""
+        device = pooled_emb.device
+        b = pooled_emb.size(0)
+
+        # Conditioning vector → soft prefix (b, n_prefix, d_model).
+        # Branched-fusion design (class_emb_dim=0): v = z directly (the fused
+        # vector already carries class info via Branch A).
+        # Legacy design (class_emb_dim>0): v = [z ; c] with c = E_cls[ŷ].
+        if self.class_embeddings is not None:
+            c = self.class_embeddings(class_indices.to(device))
+            v = torch.cat([pooled_emb, c], dim=-1)
+        else:
+            v = pooled_emb
+        soft = self.prefix_proj(v).view(b, self.n_prefix, self.d_model)
+
+        prompt_enc = self.tokenizer(
+            list(prompts), padding=True, truncation=True,
+            max_length=self.max_prompt_len, return_tensors="pt",
+        )
+        prompt_ids = prompt_enc["input_ids"].to(device)
+        prompt_mask = prompt_enc["attention_mask"].to(device)
+        with torch.no_grad():
+            prompt_embeds = self.lm.get_input_embeddings()(prompt_ids)
+
+        if target_ids is None:
+            # Inference path
+            inputs_embeds = torch.cat([soft, prompt_embeds], dim=1)
+            soft_mask = torch.ones(b, self.n_prefix, dtype=prompt_mask.dtype, device=device)
+            attn = torch.cat([soft_mask, prompt_mask], dim=1)
+            return inputs_embeds, attn, None
+
+        # Training path — concatenate target tokens after the prompt.
+        target_ids = target_ids.to(device)
+        with torch.no_grad():
+            target_embeds = self.lm.get_input_embeddings()(target_ids)
+        target_mask = (target_ids != self.tokenizer.pad_token_id).long()
+
+        inputs_embeds = torch.cat([soft, prompt_embeds, target_embeds], dim=1)
+        soft_mask = torch.ones(b, self.n_prefix, dtype=prompt_mask.dtype, device=device)
+        attn = torch.cat([soft_mask, prompt_mask, target_mask], dim=1)
+
+        # Labels: -100 everywhere except the target-token positions (so only target
+        # tokens contribute to the cross-entropy loss).
+        n_soft = self.n_prefix
+        n_prompt = prompt_ids.size(1)
+        n_target = target_ids.size(1)
+        labels = inputs_embeds.new_full(
+            (b, n_soft + n_prompt + n_target), fill_value=-100, dtype=torch.long
+        )
+        target_labels = target_ids.clone()
+        target_labels[target_labels == self.tokenizer.pad_token_id] = -100
+        labels[:, n_soft + n_prompt:] = target_labels
+        return inputs_embeds, attn, labels
+
+    # --------------------------------------------------------------------- API
+
+    def compute_loss(
+        self,
+        pooled_emb: torch.Tensor,
+        class_indices: torch.Tensor,
+        class_names: Sequence[str],
+        target_comments: Sequence[str],
+    ) -> torch.Tensor:
+        """Teacher-forced LM-CE loss using the *gold* class index.
+
+        Skips samples with empty comments; returns a zero-grad tensor if none remain.
+        """
+        device = pooled_emb.device
+        keep = [i for i, c in enumerate(target_comments) if c and c.strip()]
+        if not keep:
+            return pooled_emb.new_zeros(())
+        if len(keep) != pooled_emb.size(0):
+            pooled_emb = pooled_emb[keep]
+            class_indices = class_indices[keep]
+            class_names = [class_names[i] for i in keep]
+            target_comments = [target_comments[i] for i in keep]
+
+        prompts = self._build_prompts(class_names)
+        # Tokenize targets (with EOS appended so the model learns to stop).
+        targets = [c.strip() + self.tokenizer.eos_token for c in target_comments]
+        target_enc = self.tokenizer(
+            targets, padding=True, truncation=True,
+            max_length=self.max_target_len, return_tensors="pt",
+        )
+        inputs_embeds, attn, labels = self._build_inputs_embeds(
+            pooled_emb, class_indices, prompts, target_ids=target_enc["input_ids"],
+        )
+        out = self.lm(inputs_embeds=inputs_embeds, attention_mask=attn, labels=labels)
+        return out.loss
+
+    @torch.no_grad()
+    def generate(
+        self,
+        pooled_emb: torch.Tensor,
+        predicted_class_indices: torch.Tensor,
+        class_names: Sequence[str],
+        max_new_tokens: Optional[int] = None,
+        num_beams: int = 4,
+        do_sample: bool = False,
+    ) -> List[str]:
+        """Generate coaching comments using the classifier's *predicted* class."""
+        prompts = self._build_prompts(class_names)
+        inputs_embeds, attn, _ = self._build_inputs_embeds(
+            pooled_emb, predicted_class_indices, prompts, target_ids=None,
+        )
+        gen = self.lm.generate(
+            inputs_embeds=inputs_embeds,
+            attention_mask=attn,
+            max_new_tokens=max_new_tokens or self.max_target_len,
+            num_beams=num_beams,
+            do_sample=do_sample,
+            no_repeat_ngram_size=3,
+            pad_token_id=self.tokenizer.pad_token_id,
+            eos_token_id=self.tokenizer.eos_token_id,
+        )
+        # Strip soft-prefix + prompt portion if present, decode only generated tokens.
+        return self.tokenizer.batch_decode(gen, skip_special_tokens=True)
+
+
 class BottleneckAdapter(nn.Module):
     """Small per-user adapter trained while the base model stays frozen."""
 
@@ -638,7 +1040,12 @@ class BottleneckAdapter(nn.Module):
 
 
 class xLSTMExerciseClassifier(nn.Module):
-    """Shared xLSTM encoder with exercise, quality, and optional error-tag heads."""
+    """Shared xLSTM encoder with exercise, quality, and optional error-tag heads.
+
+    Temporal readout (``temporal_pool`` / legacy ``use_attention_pool``): **mean** (GAP),
+    **last** (final causal state — uses full prefix), or **attention** (learned softmax).
+    Optional **input_dropout** regularizes raw frame features before the stack (still causal).
+    """
 
     def __init__(
         self,
@@ -653,12 +1060,19 @@ class xLSTMExerciseClassifier(nn.Module):
         projection_factor: float = 4.0 / 3.0,
         num_error_tags: int = 0,
         quality_scale: float = 1.0,
+        quality_output_low: float = 0.0,
+        num_quality_classes: int = 1,
         adapter_dim: int = 0,
         linear_classifier: bool = False,
         block_pattern: Optional[str] = None,
         use_attention_pool: bool = False,
+        temporal_pool: Optional[str] = None,
+        input_dropout: float = 0.0,
         use_fusion: bool = False,
         fusion_dim: int = 128,
+        quality_class_conditioning: bool = False,
+        task_specific_pools: bool = False,
+        soft_class_conditioning: bool = True,
     ):
         super().__init__()
         self.xlstm = xLSTM(
@@ -672,12 +1086,48 @@ class xLSTMExerciseClassifier(nn.Module):
             projection_factor=projection_factor,
             block_pattern=block_pattern,
         )
-        self.use_attention_pool = bool(use_attention_pool)
-        if self.use_attention_pool:
-            self.attn_pool = AttentionPooling(hidden_size, hidden=max(32, hidden_size // 4), dropout=dropout)
+        idrop = float(input_dropout)
+        self.input_dropout_rate = idrop
+        self.input_drop = nn.Dropout(idrop) if idrop > 1e-8 else nn.Identity()
+
+        if use_attention_pool:
+            tp = "attention"
+        elif temporal_pool is not None and str(temporal_pool).strip():
+            tp = str(temporal_pool).strip().lower()
         else:
+            tp = "mean"
+        if tp not in ("mean", "last", "attention"):
+            raise ValueError(f"temporal_pool must be mean|last|attention; got {tp!r}")
+
+        self._temporal_pool = tp
+        self.use_attention_pool = tp == "attention"
+        self.task_specific_pools = bool(task_specific_pools) and tp == "attention"
+        self.attn_pool: Optional[AttentionPooling]
+        self.attn_pool_quality: Optional[AttentionPooling]
+        self.pool: Optional[nn.AdaptiveAvgPool1d]
+        if tp == "attention":
+            # When task_specific_pools is True, attn_pool plays the role of the
+            # classification-stream pool, and attn_pool_quality is a parallel
+            # pool with its own learnable temporal scoring MLP for the quality
+            # stream.  This lets each task pick a *different* frame weighting
+            # (e.g. peak-motion frames for cls vs depth/extension frames for
+            # quality) without changing the shared 8-block backbone above.
+            self.attn_pool = AttentionPooling(hidden_size, hidden=max(32, hidden_size // 4), dropout=dropout)
+            self.attn_pool_quality = (
+                AttentionPooling(hidden_size, hidden=max(32, hidden_size // 4), dropout=dropout)
+                if self.task_specific_pools else None
+            )
+            self.pool = None
+        elif tp == "mean":
+            self.attn_pool = None
+            self.attn_pool_quality = None
             self.pool = nn.AdaptiveAvgPool1d(1)
+        else:
+            self.attn_pool = None
+            self.attn_pool_quality = None
+            self.pool = None
         self.dropout = nn.Dropout(dropout)
+        self.soft_class_conditioning = bool(soft_class_conditioning)
 
         # Optional shared task-tower with additive fusion (whiteboard "+").
         # When enabled, the cls and quality heads consume the fused vector;
@@ -701,11 +1151,25 @@ class xLSTMExerciseClassifier(nn.Module):
                 nn.Dropout(dropout),
                 nn.Linear(head_in, num_classes),
             )
+        q_out = max(1, int(num_quality_classes))
+        self.num_quality_classes = q_out
+        self.quality_is_classification = q_out > 1
+        if self.quality_is_classification:
+            q_dim = q_out
+        else:
+            q_dim = 1
+        self.quality_class_conditioning = bool(quality_class_conditioning)
+        self.quality_class_emb: Optional[nn.Embedding]
+        if self.quality_class_conditioning:
+            self.quality_class_emb = nn.Embedding(int(num_classes), head_in)
+        else:
+            self.quality_class_emb = None
+        q_feat_in = head_in
         self.quality_head = nn.Sequential(
-            nn.Linear(head_in, head_in),
+            nn.Linear(q_feat_in, head_in),
             nn.GELU(),
             nn.Dropout(dropout),
-            nn.Linear(head_in, 1),
+            nn.Linear(head_in, q_dim),
         )
         self.error_head = (
             nn.Sequential(
@@ -723,11 +1187,25 @@ class xLSTMExerciseClassifier(nn.Module):
         # ``set_guidance_table``). Stored as a plain dict so it survives ``state_dict``
         # round-trips via the checkpoint sidecar.
         self._guidance_table: Dict[int, str] = {}
+        # Comment registry: (predicted class, quality-bucket) → corrective text.
+        # Populated by the training script via ``set_comment_table`` after the
+        # train dataset has been scanned. Empty until then; ``lookup_comment``
+        # returns empty strings when the table is missing.
+        self._comment_table: Dict[Tuple[int, int], str] = {}
+        self._quality_bucket_edges: Tuple[float, ...] = (0.4, 0.7)
+        self._quality_domain_lo: float = 0.0
+        self._quality_domain_hi: float = 1.0
+        self._quality_bucket_centres: Tuple[float, ...] = _bucket_interval_centres(
+            self._quality_bucket_edges,
+            domain_lo=self._quality_domain_lo,
+            domain_hi=self._quality_domain_hi,
+        )
         self._idx_to_class: Dict[int, str] = {}
         self.adapter = BottleneckAdapter(hidden_size, bottleneck_dim=adapter_dim, dropout=dropout) if adapter_dim > 0 else None
         self.num_classes = int(num_classes)
         self.num_error_tags = int(num_error_tags)
         self.quality_scale = float(quality_scale)
+        self.quality_output_low = float(quality_output_low)
         self.hidden_size = int(hidden_size)
         self.num_layers = int(self.xlstm.num_layers)
         self.dropout_rate = float(dropout)
@@ -740,22 +1218,129 @@ class xLSTMExerciseClassifier(nn.Module):
     def attach_adapter(self, adapter: Optional[nn.Module]) -> None:
         self.adapter = adapter
 
+    def _pool_seq(self, seq_out: torch.Tensor, *, pool_module: Optional[AttentionPooling] = None) -> torch.Tensor:
+        """Pool a sequence ``(B, T, D)`` → ``(B, D)`` using the configured strategy.
+
+        ``pool_module`` overrides ``self.attn_pool`` for attention mode (used by
+        the task-specific quality pool path).
+        """
+        tp = self._temporal_pool
+        if tp == "attention":
+            pool = pool_module if pool_module is not None else self.attn_pool
+            assert pool is not None
+            return pool(seq_out)
+        if tp == "last":
+            return seq_out[:, -1, :]
+        assert self.pool is not None
+        return self.pool(seq_out.transpose(1, 2)).squeeze(-1)
+
     def encode(self, x: torch.Tensor, adapter: Optional[nn.Module] = None) -> torch.Tensor:
-        """Encode a clip to its raw pooled embedding (256-d). Comment head consumes this directly."""
-        seq_out, _ = self.xlstm(x)
-        if self.use_attention_pool:
-            pooled = self.attn_pool(seq_out)
-        else:
-            pooled = self.pool(seq_out.transpose(1, 2)).squeeze(-1)
+        """Encode a clip to its raw pooled embedding (256-d). Comment head consumes this directly.
+
+        With ``task_specific_pools=True`` this returns the **classification** stream
+        pool; the quality stream pool is computed separately by ``encode_pair``.
+        """
+        seq_out, _ = self.xlstm(self.input_drop(x))
+        pooled = self._pool_seq(seq_out)
         pooled = self.dropout(pooled)
         active_adapter = adapter if adapter is not None else self.adapter
         if active_adapter is not None:
             pooled = active_adapter(pooled)
         return pooled
 
-    def fuse(self, pooled: torch.Tensor) -> torch.Tensor:
-        """Apply the additive fusion tower (no-op if ``use_fusion=False``)."""
-        return self.fusion(pooled) if self.fusion is not None else pooled
+    def encode_pair(
+        self,
+        x: torch.Tensor,
+        adapter: Optional[nn.Module] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Encode with **two** task-specific pools.
+
+        Returns ``(pooled_cls, pooled_quality)``. Both come from the same 8-block
+        backbone — only the temporal attention is task-specific.  When
+        ``task_specific_pools=False`` (or when not using attention pooling) the
+        two returned tensors are the same object (back-compat fast path).
+        """
+        seq_out, _ = self.xlstm(self.input_drop(x))
+        pooled_cls = self._pool_seq(seq_out)
+        if self.task_specific_pools and self.attn_pool_quality is not None:
+            pooled_quality = self._pool_seq(seq_out, pool_module=self.attn_pool_quality)
+        else:
+            pooled_quality = pooled_cls
+        active_adapter = adapter if adapter is not None else self.adapter
+
+        def _finish(t: torch.Tensor) -> torch.Tensor:
+            t = self.dropout(t)
+            return active_adapter(t) if active_adapter is not None else t
+
+        pooled_cls = _finish(pooled_cls)
+        # If the quality pool is the same object, dropout/adapter were applied
+        # once via _finish(pooled_cls); only re-finish when we actually have a
+        # separate tensor.
+        pooled_quality = _finish(pooled_quality) if pooled_quality is not pooled_cls else pooled_cls
+        return pooled_cls, pooled_quality
+
+    def fuse(self, pooled: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Apply the branched fusion tower.
+
+        Returns ``(a, b, z)`` where:
+            a → consumed by the classification head only
+            b → consumed by the quality head only
+            z = a + b → carries both signals; consumed by the comment head
+
+        If fusion is disabled (``use_fusion=False``), returns ``(pooled, pooled, pooled)``
+        so all three heads receive the raw clip embedding.
+        """
+        if self.fusion is None:
+            return pooled, pooled, pooled
+        return self.fusion(pooled)
+
+    def quality_branch_feat(
+        self,
+        branch_b: torch.Tensor,
+        class_logits: torch.Tensor,
+        explicit_class_one_hot: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
+        """Features fed into ``quality_head`` = branch-B + class-embedding offset.
+
+        Two conditioning modes:
+
+        * ``soft_class_conditioning=True`` (default): mix the class-embedding rows
+          by the **soft** class distribution.
+
+              p = explicit_one_hot if given else softmax(class_logits)
+              offset = p @ class_emb.weight            # (B, C) @ (C, D) → (B, D)
+
+          This is **fully differentiable end-to-end** — quality loss can push
+          gradients back through ``class_logits``, so the classifier learns to
+          produce class distributions that help the quality head, not just hit
+          the cls-loss target.
+
+        * ``soft_class_conditioning=False`` (legacy): hard lookup of
+          ``class_emb[argmax]`` — non-differentiable, the two heads are
+          decoupled at the conditioning step.
+
+        Returns ``branch_b`` unchanged if ``quality_class_conditioning=False``.
+        """
+        if not self.quality_class_conditioning:
+            return branch_b
+        assert self.quality_class_emb is not None
+
+        if self.soft_class_conditioning:
+            if explicit_class_one_hot is not None:
+                p = explicit_class_one_hot.to(device=branch_b.device, dtype=branch_b.dtype)
+            else:
+                p = F.softmax(class_logits, dim=-1).to(dtype=branch_b.dtype)
+            offset = p @ self.quality_class_emb.weight.to(dtype=branch_b.dtype)
+            return branch_b + offset
+
+        # Legacy hard-argmax path
+        if explicit_class_one_hot is not None:
+            oh = explicit_class_one_hot.to(device=branch_b.device)
+            idx = oh.argmax(dim=-1).long().clamp(min=0, max=self.num_classes - 1)
+        else:
+            idx = class_logits.argmax(dim=-1).long().clamp(min=0, max=self.num_classes - 1)
+        e = self.quality_class_emb(idx).to(dtype=branch_b.dtype)
+        return branch_b + e
 
     # -------------------------------- guidance lookup helpers --------------------------------
 
@@ -774,6 +1359,84 @@ class xLSTMExerciseClassifier(nn.Module):
             out.append(self._guidance_table.get(int(idx), ""))
         return out
 
+    def set_comment_table(
+        self,
+        table: Dict[Tuple[int, int], str],
+        bucket_edges: Tuple[float, ...],
+        *,
+        domain_lo: float = 0.0,
+        domain_hi: float = 1.0,
+    ) -> None:
+        """Register the (class, quality-bucket) → corrective comment lookup.
+
+        Built once from the training set in
+        ``train_xlstm_egoexo_multitask.py`` via
+        ``EgoExoXLSTMDataset.build_comment_table`` and persisted in the
+        checkpoint so inference is self-contained.
+
+        ``domain_lo`` / ``domain_hi`` bound the same axis as CSV quality after
+        ``canonical_quality_score`` (``[0,1]`` vs ``[1,5]`` Likert).
+        """
+        self._comment_table = {
+            (int(k[0]), int(k[1])): str(v) for k, v in table.items()
+        }
+        self._quality_bucket_edges = tuple(float(e) for e in bucket_edges)
+        self._quality_domain_lo = float(domain_lo)
+        self._quality_domain_hi = float(domain_hi)
+        self._quality_bucket_centres = _bucket_interval_centres(
+            self._quality_bucket_edges,
+            domain_lo=self._quality_domain_lo,
+            domain_hi=self._quality_domain_hi,
+        )
+
+    def lookup_comment(
+        self,
+        class_indices: torch.Tensor,
+        quality_scores: torch.Tensor,
+        *,
+        quality_bucket_indices: Optional[torch.Tensor] = None,
+    ) -> List[str]:
+        """Retrieve the corrective comment for each (predicted class, quality) pair.
+
+        ``quality_scores`` are either regression scalars on the training quality axis
+        (shape ``[B]`` / ``[B,1]``), or logits/probabilities over ``K`` quality buckets
+        (shape ``[B, K]``). When ``quality_bucket_indices`` is provided (integer buckets),
+        it overrides bucketing from continuous scalars / logits.
+        """
+        edges = self._quality_bucket_edges
+        n_buckets = len(edges) + 1
+        out: List[str] = []
+
+        if quality_bucket_indices is not None:
+            for cls_idx, bkt in zip(
+                class_indices.detach().cpu().tolist(),
+                quality_bucket_indices.detach().cpu().tolist(),
+            ):
+                out.append(self._comment_table.get((int(cls_idx), int(bkt)), ""))
+            return out
+
+        # Infer from tensor rank: logits/probs per bucket vs scalar regression
+        qs = quality_scores
+        if qs.dim() == 2 and qs.size(-1) == self.num_quality_classes and self.num_quality_classes > 1:
+            buckets = qs.argmax(dim=1).detach().cpu().tolist()
+            for cls_idx, bucket in zip(class_indices.detach().cpu().tolist(), buckets):
+                out.append(self._comment_table.get((int(cls_idx), int(bucket)), ""))
+            return out
+
+        scalars = qs.squeeze(-1) if qs.dim() == 2 else qs
+        for cls_idx, q in zip(
+            class_indices.detach().cpu().tolist(),
+            scalars.detach().cpu().tolist(),
+        ):
+            q = float(q)
+            bucket = n_buckets - 1
+            for i, e in enumerate(edges):
+                if q < e:
+                    bucket = i
+                    break
+            out.append(self._comment_table.get((int(cls_idx), int(bucket)), ""))
+        return out
+
     def freeze_backbone(self, freeze: bool = True, last_n_unfrozen: int = 0) -> None:
         """Optionally freeze the xLSTM stack (and input projection) for fast head fine-tuning.
 
@@ -789,15 +1452,38 @@ class xLSTMExerciseClassifier(nn.Module):
             for p in block.parameters():
                 p.requires_grad_(unfreeze)
 
-    def forward(self, x: torch.Tensor, adapter: Optional[nn.Module] = None):
-        pooled = self.encode(x, adapter=adapter)
-        fused = self.fuse(pooled)
-        class_logits = self.class_head(fused)
-        quality_raw = self.quality_head(fused)
-        quality_scores = torch.sigmoid(quality_raw) * self.quality_scale
+    def forward(
+        self,
+        x: torch.Tensor,
+        adapter: Optional[nn.Module] = None,
+        *,
+        quality_explicit_class_one_hot: Optional[torch.Tensor] = None,
+    ):
+        # Task-specific pools (when enabled) produce one pooled embedding per
+        # task — the classification stream and quality stream see different
+        # frame weightings over the same 8-block backbone.  When disabled the
+        # two returned tensors are the same.
+        pooled_cls, pooled_q = self.encode_pair(x, adapter=adapter)
+        # Branched fusion: a feeds cls only, b feeds quality only, z = a+b is
+        # available for the comment head via the helper below.
+        a_cls, _b_cls, _z_cls = self.fuse(pooled_cls)
+        if pooled_q is pooled_cls:
+            a_for_z, b, _ = self.fuse(pooled_q)
+            _z = a_for_z + b  # comment head sees the shared fused vector
+        else:
+            _a_q, b, _ = self.fuse(pooled_q)
+            _z = a_cls + b    # cls path's a + quality path's b for the comment head
+        class_logits = self.class_head(a_cls)
+        b_q = self.quality_branch_feat(b, class_logits, quality_explicit_class_one_hot)
+        quality_raw = self.quality_head(b_q)
+        if self.quality_is_classification:
+            quality_scores = quality_raw
+        else:
+            quality_scores = torch.sigmoid(quality_raw) * self.quality_scale + self.quality_output_low
         if self.error_head is None:
             return class_logits, quality_scores
-        error_logits = self.error_head(fused)
+        # The error head retains the fused vector since it's a shared auxiliary.
+        error_logits = self.error_head(_z)
         return class_logits, quality_scores, error_logits
 
     @torch.no_grad()
@@ -815,22 +1501,32 @@ class xLSTMExerciseClassifier(nn.Module):
         surfaced as a separate field — the predicted exercise name is included for
         UI convenience.
         """
-        pooled = self.encode(x)
-        fused = self.fuse(pooled)
-        logits = self.class_head(fused)
+        pooled_cls, pooled_q = self.encode_pair(x)
+        # Branched fusion per stream: a from cls pool, b from quality pool.
+        a, _, _ = self.fuse(pooled_cls)
+        _, b, _ = self.fuse(pooled_q)
+        logits = self.class_head(a)
         cls_idx = logits.argmax(dim=1)
-        quality = (torch.sigmoid(self.quality_head(fused)).squeeze(-1) * self.quality_scale).cpu().tolist()
         exercises = [self._idx_to_class.get(int(i), "") for i in cls_idx.cpu().tolist()]
         guidance = self.lookup_guidance(cls_idx)
+        b_q = self.quality_branch_feat(b, logits, None)
+        q_raw = self.quality_head(b_q)
+        if self.quality_is_classification:
+            probs = torch.softmax(q_raw, dim=-1)
+            centres = q_raw.new_tensor(list(self._quality_bucket_centres))
+            q_expect = (probs * centres).sum(dim=-1)
+            qb = q_raw.argmax(dim=1)
+            quality = q_expect.detach().cpu().tolist()
+            comments = self.lookup_comment(cls_idx, q_raw, quality_bucket_indices=qb)
+            qb_list = qb.detach().cpu().tolist()
+            return [
+                {"exercise": ex, "quality": float(q), "quality_bucket": int(bi), "guidance": g, "comment": c}
+                for ex, q, bi, g, c in zip(exercises, quality, qb_list, guidance, comments)
+            ]
 
-        if comment_head is not None:
-            # Use predicted error logits if the head exists, else zeros — the comment
-            # head will still produce a sensible coaching tip from the class name alone.
-            err_logits = self.error_head(fused) if self.error_head is not None else \
-                torch.zeros(pooled.size(0), len(comment_head.error_tags), device=pooled.device)
-            comments = comment_head.generate(pooled, err_logits, exercises)
-        else:
-            comments = ["" for _ in exercises]
+        q_tensor = torch.sigmoid(q_raw).squeeze(-1) * self.quality_scale + self.quality_output_low
+        quality = q_tensor.detach().cpu().tolist()
+        comments = self.lookup_comment(cls_idx, q_tensor)
 
         return [
             {"exercise": ex, "quality": float(q), "guidance": g, "comment": c}
@@ -851,7 +1547,10 @@ class xLSTMExerciseClassifier(nn.Module):
         error_pos_weight: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
         ce_loss = F.cross_entropy(class_logits, labels)
-        reg_loss = F.mse_loss(quality_scores.squeeze(-1), quality_targets)
+        if self.quality_is_classification:
+            reg_loss = F.cross_entropy(quality_scores, quality_targets.long())
+        else:
+            reg_loss = F.mse_loss(quality_scores.squeeze(-1), quality_targets)
         total_loss = class_weight * ce_loss
         if quality_weight > 0:
             total_loss = total_loss + quality_weight * reg_loss

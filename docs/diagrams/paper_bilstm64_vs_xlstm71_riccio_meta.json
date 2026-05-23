@@ -1,0 +1,30 @@
+{
+  "bilstm_metrics": "/Users/emelkonyan/Finess-coach-capstone-1/results/paper_bilstm_hidden64/bilstm_cnn/test_classification_metrics.json",
+  "xlstm_metrics": "/Users/emelkonyan/Finess-coach-capstone-1/results/paper_xlstm_vit256/xlstm_7_1/test_classification_metrics.json",
+  "dataset_note": "Riccio \u00b7 ViT-256 patches \u00b7 4 classes \u00b7 same test split",
+  "accuracy_bilstm_pct": 77.53,
+  "accuracy_xlstm_pct": 75.8,
+  "f1_macro_bilstm": 0.7977,
+  "f1_macro_xlstm": 0.7695,
+  "parameters_bilstm": 624773,
+  "parameters_xlstm": 5215573,
+  "per_class_recall_pct": {
+    "bilstm": {
+      "Biceps curl": 67.09183673469387,
+      "Push-up": 100.0,
+      "Shoulder press": 83.26271186440678,
+      "Squat": 68.58736059479554
+    },
+    "xlstm": {
+      "Biceps curl": 49.234693877551024,
+      "Push-up": 98.91304347826086,
+      "Shoulder press": 82.41525423728814,
+      "Squat": 77.5092936802974
+    }
+  },
+  "forward_median_ms_cpu": {
+    "bilstm": 18.962645990541205,
+    "xlstm": 695.6454375031171,
+    "device_note": "cpu"
+  }
+}

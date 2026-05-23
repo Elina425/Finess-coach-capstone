@@ -121,3 +121,6 @@ fitness_coach/datasets/shoulder/
 # --- Local data caches (downloaded datasets) ---
 data/raw_clips/
 data/cache/
+credentials.py
+*.pyc
+yolov11m-pose.pt

@@ -1,0 +1,8 @@
+project: fitness-coach-paper-classification
+kernel_slug: emelkonyan/fitness-coach-paper-classification
+code_file: notebooks/kaggle_paper_classification.ipynb
+accelerator: gpu    # none | gpu | tpu
+internet: true
+datasets:
+  - emelkonyan/riccio-realtime-exercise-recognition
+  # Add more datasets as needed

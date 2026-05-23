@@ -15,6 +15,12 @@ Primary path (Riccio / Kaggle-style NPZs):
 Optional (index CSV + angles dir): build_exercise_training_index.py or EgoExo index — see --index-csv / --angles-dir.
 
 Examples:
+  # PosePulse-style: mixed (T,42), train-only standardization, 2×128 BiLSTM→BN+Conv+GAP, classification only
+  PYTHONPATH=. python train_exercise_bilstm.py --preset posepulse --eval-test \\
+    --kaggle-angles-dir results/riccio_realtime_exercise_recognition \\
+    --kaggle-stem riccio_realtime_exercise_recognition --epochs 30 \\
+    --output-dir results/exercise_bilstm_posepulse
+
   # Default capstone: Riccio NPZs
   ./venv/bin/python train_exercise_bilstm.py --preset riccio --standardize --eval-test \\
     --kaggle-angles-dir results/riccio_realtime_exercise_recognition \\
@@ -41,25 +47,45 @@ from typing import Any, Dict, List, Optional, Tuple, Union
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 
 from fitness_coach.datasets.exercise_bilstm_dataset import (
     ExerciseAngleWindowDataset,
     build_kaggle_angle_datasets,
+    build_kaggle_frame_feature_datasets,
+    build_kaggle_mixed_datasets,
+    coarse_exclusion_normalized_set,
     fit_standardizer_from_dataset,
     load_index_rows,
+    normalized_coarse_class,
 )
 from fitness_coach.datasets.text_coaching_features import TextCoachingEncoder, fit_text_coaching_encoder
-from fitness_coach.models.exercise_bilstm_model import build_exercise_bilstm
+from fitness_coach.models.exercise_bilstm_model import build_exercise_bilstm, unpack_bilstm_outputs
+
+
+def build_bilstm_optimizer(
+    model: nn.Module,
+    *,
+    kind: str,
+    lr: float,
+    weight_decay: float,
+) -> torch.optim.Optimizer:
+    """``adam`` or ``adamw`` (default BiLSTM trainer previously used AdamW only)."""
+    k = (kind or "adamw").strip().lower()
+    if k == "adam":
+        return torch.optim.Adam(model.parameters(), lr=float(lr), weight_decay=float(weight_decay))
+    if k == "adamw":
+        return torch.optim.AdamW(model.parameters(), lr=float(lr), weight_decay=float(weight_decay))
+    raise ValueError(f"Unknown optimizer {kind!r}; use 'adam' or 'adamw'.")
 
 
 @dataclass
 class BiLSTMTrainContext:
     """Datasets and metadata after index/Kaggle resolution (before model / loaders)."""
 
-    train_ds: ExerciseAngleWindowDataset
-    val_ds: ExerciseAngleWindowDataset
-    test_ds: Optional[ExerciseAngleWindowDataset]
+    train_ds: Dataset
+    val_ds: Dataset
+    test_ds: Optional[Dataset]
     classes: List[str]
     class_to_idx: Dict[str, int]
     idx_to_class: Dict[int, str]
@@ -70,6 +96,8 @@ class BiLSTMTrainContext:
     kaggle_dir: str
     window: int
     stride: int
+    window_label: str
+    excluded_coarse_classes: Optional[List[str]]
     rows: List[dict]
 
 
@@ -114,6 +142,14 @@ def _maybe_report_prune(trial: Any, step: int, value: float) -> None:
         pass
 
 
+def parse_exclude_coarse_classes_cli(raw: str) -> Optional[List[str]]:
+    """Comma-separated coarse names; empty string → exclude nothing (``None``)."""
+    t = (raw or "").strip()
+    if not t:
+        return None
+    return [p.strip() for p in t.split(",") if p.strip()]
+
+
 def build_bilstm_train_context(args: argparse.Namespace) -> Optional[BiLSTMTrainContext]:
     """
     Build train/val/(test) datasets from --index-csv or --kaggle-angles-dir.
@@ -123,31 +159,69 @@ def build_bilstm_train_context(args: argparse.Namespace) -> Optional[BiLSTMTrain
     scale_mean = scale_std = None
     test_ds = None
     rows: List[dict] = []
+    exc = parse_exclude_coarse_classes_cli(getattr(args, "exclude_classes", "") or "")
 
     if kaggle_dir:
         kpath = Path(kaggle_dir)
         if not kpath.is_dir():
             print(f"Not a directory: {kpath}", file=sys.stderr)
             return None
-        if args.feature_mode != "angles":
-            print(
-                "Kaggle mode uses precomputed biomechanics angles only; using feature-mode=angles.",
-                file=sys.stderr,
-            )
-            args.feature_mode = "angles"
+        wl = str(getattr(args, "window_label", "last") or "last").strip().lower()
+        if wl not in ("first", "last"):
+            print(f"Invalid --window-label {wl!r}; use first or last.", file=sys.stderr)
+            return None
         try:
-            train_ds, val_ds, test_ds, class_to_idx, idx_to_class, scale_mean, scale_std = (
-                build_kaggle_angle_datasets(
-                    kpath,
-                    stem=args.kaggle_stem,
-                    window=args.window,
-                    stride=args.stride,
-                    test_ratio=args.kaggle_test_ratio,
-                    val_ratio=args.kaggle_val_ratio,
-                    seed=args.kaggle_seed,
-                    standardize=args.standardize,
+            if args.feature_mode == "mixed":
+                train_ds, val_ds, test_ds, class_to_idx, idx_to_class, scale_mean, scale_std = (
+                    build_kaggle_mixed_datasets(
+                        kpath,
+                        stem=args.kaggle_stem,
+                        window=args.window,
+                        stride=args.stride,
+                        test_ratio=args.kaggle_test_ratio,
+                        val_ratio=args.kaggle_val_ratio,
+                        seed=args.kaggle_seed,
+                        standardize=args.standardize,
+                        window_label=wl,
+                        exclude_coarse_classes=exc,
+                    )
                 )
-            )
+            elif args.feature_mode in ("vit_backbone", "resnet_backbone"):
+                train_ds, val_ds, test_ds, class_to_idx, idx_to_class, scale_mean, scale_std = (
+                    build_kaggle_frame_feature_datasets(
+                        kpath,
+                        stem=args.kaggle_stem,
+                        window=args.window,
+                        stride=args.stride,
+                        test_ratio=args.kaggle_test_ratio,
+                        val_ratio=args.kaggle_val_ratio,
+                        seed=args.kaggle_seed,
+                        standardize=args.standardize,
+                        window_label=wl,
+                        exclude_coarse_classes=exc,
+                    )
+                )
+            else:
+                if args.feature_mode not in ("angles", "mixed"):
+                    print(
+                        "Kaggle mode supports feature-mode angles, mixed, vit_backbone, or resnet_backbone; using angles.",
+                        file=sys.stderr,
+                    )
+                    args.feature_mode = "angles"
+                train_ds, val_ds, test_ds, class_to_idx, idx_to_class, scale_mean, scale_std = (
+                    build_kaggle_angle_datasets(
+                        kpath,
+                        stem=args.kaggle_stem,
+                        window=args.window,
+                        stride=args.stride,
+                        test_ratio=args.kaggle_test_ratio,
+                        val_ratio=args.kaggle_val_ratio,
+                        seed=args.kaggle_seed,
+                        standardize=args.standardize,
+                        window_label=wl,
+                        exclude_coarse_classes=exc,
+                    )
+                )
         except (FileNotFoundError, ValueError, RuntimeError) as e:
             print(str(e), file=sys.stderr)
             return None
@@ -168,7 +242,21 @@ def build_bilstm_train_context(args: argparse.Namespace) -> Optional[BiLSTMTrain
             print("No train split in index", file=sys.stderr)
             return None
 
-        classes = sorted({r["exercise_class"] for r in train_rows})
+        ex_norm = coarse_exclusion_normalized_set(exc)
+        classes = sorted(
+            {
+                r["exercise_class"]
+                for r in train_rows
+                if normalized_coarse_class(r["exercise_class"]) not in ex_norm
+            }
+        )
+        if len(classes) < 2:
+            print(
+                "Fewer than 2 exercise classes in train split after --exclude-classes; "
+                "clear exclusions or broaden data.",
+                file=sys.stderr,
+            )
+            return None
         class_to_idx = {c: i for i, c in enumerate(classes)}
         idx_to_class = {i: c for c, i in class_to_idx.items()}
 
@@ -236,7 +324,8 @@ def build_bilstm_train_context(args: argparse.Namespace) -> Optional[BiLSTMTrain
             )
         return None
 
-    feat_dim = train_ds.samples[0][0].shape[1] if train_ds.samples else 8
+    samples = getattr(train_ds, "samples", None)
+    feat_dim = int(samples[0][0].shape[1]) if samples else 8
     return BiLSTMTrainContext(
         train_ds=train_ds,
         val_ds=val_ds,
@@ -251,6 +340,8 @@ def build_bilstm_train_context(args: argparse.Namespace) -> Optional[BiLSTMTrain
         kaggle_dir=kaggle_dir,
         window=args.window,
         stride=args.stride,
+        window_label=str(getattr(args, "window_label", "last") or "last"),
+        excluded_coarse_classes=list(exc) if exc else None,
         rows=rows,
     )
 
@@ -303,6 +394,13 @@ def run_bilstm_training(
     cnn_hidden: int = 64,
     attn_heads: int = 4,
     ce_class_weights: Optional[torch.Tensor] = None,
+    optimizer_kind: str = "adamw",
+    dora_head_rank: int = 0,
+    dora_head_alpha: float = 8.0,
+    label_smoothing: float = 0.0,
+    grad_clip_max_norm: float = 2.0,
+    use_cosine_schedule: bool = False,
+    lr_eta_min: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Train BiLSTM; maximize validation accuracy for checkpointing.
@@ -332,8 +430,18 @@ def run_bilstm_training(
         text_dim=text_dim,
         cnn_hidden=cnn_hidden,
         attn_heads=attn_heads,
+        sequence_len=int(ctx.window),
+        dora_head_rank=int(dora_head_rank),
+        dora_head_alpha=float(dora_head_alpha),
     ).to(device)
-    opt = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+    opt = build_bilstm_optimizer(
+        model, kind=optimizer_kind, lr=lr, weight_decay=weight_decay
+    )
+    scheduler = None
+    if use_cosine_schedule:
+        from torch.optim.lr_scheduler import CosineAnnealingLR
+
+        scheduler = CosineAnnealingLR(opt, T_max=int(epochs), eta_min=float(lr_eta_min))
 
     best_acc = 0.0
     best_rmse = 0.0
@@ -349,6 +457,8 @@ def run_bilstm_training(
             reg_weight,
             device,
             ce_class_weights=ce_class_weights,
+            label_smoothing=float(label_smoothing),
+            grad_clip_max_norm=float(grad_clip_max_norm),
         )
         if val_loader is not None:
             va, vrmse, vreg = evaluate(model, val_loader, device, len(ctx.classes))
@@ -367,11 +477,19 @@ def run_bilstm_training(
             if save_checkpoint:
                 best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
         if verbose:
+            if getattr(model, "has_regression_head", True):
+                qtail = (
+                    f"val_q_rmse={vrmse:.4f}  val_q_mae={vreg['mae']:.4f}  val_q_r2={vreg['r2']:.4f}"
+                )
+            else:
+                qtail = "val_quality=n/a (classification-only)"
+            lr_cur = opt.param_groups[0].get("lr", float("nan"))
             print(
                 f"epoch {epoch:03d}  train_loss={last_tr_loss:.4f}  "
-                f"val_acc={va:.4f}  val_q_rmse={vrmse:.4f}  val_q_mae={vreg['mae']:.4f}  "
-                f"val_q_r2={vreg['r2']:.4f}"
+                f"val_acc={va:.4f}  {qtail}  lr={lr_cur:.2e}"
             )
+        if scheduler is not None:
+            scheduler.step()
 
     if save_checkpoint and best_state is None and val_loader is None:
         best_state = {k: v.cpu().clone() for k, v in model.state_dict().items()}
@@ -401,6 +519,17 @@ def run_bilstm_training(
             "architecture": str(architecture),
             "cnn_hidden": int(cnn_hidden) if str(architecture) == "cnn_attn" else 0,
             "attn_heads": int(getattr(model, "attn_heads", 0)),
+            "posepulse_sequence_len": int(ctx.window),
+            "window_label": str(ctx.window_label),
+            "optimizer": str(optimizer_kind),
+            "dora_head_rank": int(dora_head_rank),
+            "dora_head_alpha": float(dora_head_alpha),
+            "excluded_coarse_classes": list(getattr(ctx, "excluded_coarse_classes", None) or []),
+            "has_regression_head": bool(getattr(model, "has_regression_head", True)),
+            "label_smoothing": float(label_smoothing),
+            "grad_clip_max_norm": float(grad_clip_max_norm),
+            "lr_scheduler": "cosine" if use_cosine_schedule else "none",
+            "lr_eta_min": float(lr_eta_min),
         }
         if text_coaching_encoder is not None and int(text_dim) > 0:
             text_coaching_encoder.save(out_dir / "text_coaching_encoder.pkl")
@@ -481,12 +610,14 @@ def train_one_epoch(
     reg_weight: float,
     device: torch.device,
     ce_class_weights: Optional[torch.Tensor] = None,
+    label_smoothing: float = 0.0,
+    grad_clip_max_norm: float = 2.0,
 ):
     model.train()
     total = 0.0
     n = 0
     w = ce_class_weights.to(device) if ce_class_weights is not None else None
-    ce = nn.CrossEntropyLoss(weight=w)
+    ce = nn.CrossEntropyLoss(weight=w, label_smoothing=float(label_smoothing))
     mse = nn.MSELoss()
     for batch in loader:
         if len(batch) == 4:
@@ -499,10 +630,13 @@ def train_one_epoch(
         y_cls = y_cls.to(device)
         y_q = y_q.to(device)
         opt.zero_grad()
-        logits, pred_q = model(xb, tb)
-        loss = cls_weight * ce(logits, y_cls) + reg_weight * mse(pred_q, y_q)
+        logits, pred_q = unpack_bilstm_outputs(model(xb, tb))
+        if pred_q is None:
+            loss = cls_weight * ce(logits, y_cls)
+        else:
+            loss = cls_weight * ce(logits, y_cls) + reg_weight * mse(pred_q, y_q)
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(model.parameters(), 2.0)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), float(grad_clip_max_norm))
         opt.step()
         total += float(loss.item()) * xb.size(0)
         n += xb.size(0)
@@ -544,7 +678,7 @@ def evaluate(
         xb = xb.to(device)
         y_cls = y_cls.to(device)
         y_q = y_q.to(device)
-        logits, pred_q = model(xb, tb)
+        logits, pred_q = unpack_bilstm_outputs(model(xb, tb))
         pred = logits.argmax(dim=1)
         if detailed:
             ys_list.extend(y_cls.cpu().numpy().tolist())
@@ -552,24 +686,28 @@ def evaluate(
             probs_list.append(torch.softmax(logits, dim=1).detach().cpu().numpy())
         correct += int((pred == y_cls).sum().item())
         tot += xb.size(0)
-        reg_err += float(mse(pred_q, y_q).item()) * xb.size(0)
-        abs_err += float(torch.abs(pred_q - y_q).sum().item())
-        q_true.extend(y_q.detach().cpu().numpy().astype(np.float64).tolist())
-        q_pred.extend(pred_q.detach().cpu().numpy().astype(np.float64).tolist())
+        if pred_q is not None:
+            reg_err += float(mse(pred_q, y_q).item()) * xb.size(0)
+            abs_err += float(torch.abs(pred_q - y_q).sum().item())
+            q_true.extend(y_q.detach().cpu().numpy().astype(np.float64).tolist())
+            q_pred.extend(pred_q.detach().cpu().numpy().astype(np.float64).tolist())
     acc = correct / max(tot, 1)
-    rmse = (reg_err / max(tot, 1)) ** 0.5
-    mae = abs_err / max(tot, 1)
-    r2 = float("nan")
-    if tot > 0 and len(q_true) > 1:
-        try:
-            from sklearn.metrics import r2_score
+    if not q_pred:
+        reg_metrics = {"rmse": float("nan"), "mae": float("nan"), "r2": float("nan")}
+    else:
+        rmse = (reg_err / max(tot, 1)) ** 0.5
+        mae = abs_err / max(tot, 1)
+        r2 = float("nan")
+        if tot > 0 and len(q_true) > 1:
+            try:
+                from sklearn.metrics import r2_score
 
-            yt = np.asarray(q_true, dtype=np.float64)
-            yp = np.asarray(q_pred, dtype=np.float64)
-            r2 = float(r2_score(yt, yp))
-        except ValueError:
-            r2 = float("nan")
-    reg_metrics = {"rmse": float(rmse), "mae": float(mae), "r2": r2}
+                yt = np.asarray(q_true, dtype=np.float64)
+                yp = np.asarray(q_pred, dtype=np.float64)
+                r2 = float(r2_score(yt, yp))
+            except ValueError:
+                r2 = float("nan")
+        reg_metrics = {"rmse": float(rmse), "mae": float(mae), "r2": r2}
     if detailed:
         if class_names is None:
             raise ValueError("class_names required when detailed=True")
@@ -582,8 +720,8 @@ def evaluate(
             class_names,
         )
         y_prob_arr = np.vstack(probs_list) if probs_list else np.zeros((0, len(class_names)), dtype=np.float64)
-        return acc, rmse, reg_metrics, metrics, y_true_arr, y_prob_arr
-    return acc, rmse, reg_metrics
+        return acc, reg_metrics["rmse"], reg_metrics, metrics, y_true_arr, y_prob_arr
+    return acc, reg_metrics["rmse"], reg_metrics
 
 
 def add_bilstm_train_args(ap: argparse.ArgumentParser) -> None:
@@ -597,9 +735,10 @@ def add_bilstm_train_args(ap: argparse.ArgumentParser) -> None:
     )
     ap.add_argument(
         "--feature-mode",
-        choices=("angles", "coords", "mixed"),
+        choices=("angles", "coords", "mixed", "vit_backbone", "resnet_backbone"),
         default="angles",
-        help="angles=(T,8) biomechanics; coords=(T,34) normalized xy only; mixed=(T,42) angles+xy",
+        help="angles=(T,8); coords=(T,34); mixed=(T,42); vit_backbone=(T,D) ViT/ViTPose crop embeddings (typ. D=256); "
+        "resnet_backbone=(T,D) torchvision ResNet GAP embeddings from --representation resnet_backbone (D=512 or 2048).",
     )
     ap.add_argument(
         "--standardize",
@@ -608,9 +747,18 @@ def add_bilstm_train_args(ap: argparse.ArgumentParser) -> None:
     )
     ap.add_argument(
         "--preset",
-        choices=("none", "riccio"),
+        choices=("none", "riccio", "posepulse", "paper_riccio", "paper_posepulse_vit", "paper_posepulse_resnet"),
         default="none",
-        help="riccio: Table 4 BiLSTM — units 73, dropout ~0.22, lr 4e-4, batch 54",
+        help="riccio: Table 4 BiLSTM — units 73, dropout ~0.22, lr 4e-4, batch 54. "
+        "posepulse: mixed (T,42), window label first, standardize, diagram BiLSTM–CNN "
+        "(2×128 + BN + GAP), Adam, **no** quality head / DoRA. Exclude hammer curl by default "
+        "(--exclude-classes). Use --exclude-classes \"\" to keep all classes. "
+        "paper_riccio: capstone paper BiLSTM–CNN on (1,30,8) map, AdamW, cosine LR, label smoothing 0.1, "
+        "grad clip 1.0, batch 64, 50 epochs, DoRA rank 8 on classifier, exclude hammer curl by default. "
+        "paper_posepulse_vit: same as paper_riccio but inputs are ViTPose-S 256-D frame_features "
+        "(export NPZ with riccio_kaggle_video_pipeline --representation vit_backbone). "
+        "paper_posepulse_resnet: same hyperparameters but ResNet crop embeddings "
+        "(export with --representation resnet_backbone).",
     )
     ap.add_argument("--output-dir", default="./results/exercise_bilstm")
     ap.add_argument("--batch-size", type=int, default=32)
@@ -623,17 +771,67 @@ def add_bilstm_train_args(ap: argparse.ArgumentParser) -> None:
     ap.add_argument("--cls-weight", type=float, default=1.0)
     ap.add_argument("--reg-weight", type=float, default=0.5)
     ap.add_argument(
+        "--label-smoothing",
+        type=float,
+        default=0.0,
+        help="Cross-entropy label smoothing (paper capstone: 0.1 with --preset paper_riccio).",
+    )
+    ap.add_argument(
+        "--grad-clip",
+        type=float,
+        default=2.0,
+        dest="grad_clip",
+        help="Max gradient norm (paper: 1.0 with --preset paper_riccio).",
+    )
+    ap.add_argument(
+        "--lr-scheduler",
+        choices=("none", "cosine"),
+        default="none",
+        help="Learning-rate schedule; paper uses cosine to η_min with --preset paper_riccio.",
+    )
+    ap.add_argument(
+        "--lr-eta-min",
+        type=float,
+        default=0.0,
+        help="Cosine schedule floor (paper: 3e-6). Used when --lr-scheduler cosine.",
+    )
+    ap.add_argument(
         "--weight-decay",
         type=float,
         default=1e-4,
-        help="AdamW weight decay (Riccio-style tuning often searches log-uniform around 1e-4).",
+        help="L2 weight decay for Adam / AdamW.",
     )
-    ap.add_argument("--cpu", action="store_true")
+    ap.add_argument(
+        "--optimizer",
+        choices=("adam", "adamw"),
+        default="adamw",
+        help="Optimization algorithm. Preset posepulse uses Adam (plain heads, no DoRA).",
+    )
+    ap.add_argument(
+        "--dora-head-rank",
+        type=int,
+        default=0,
+        help="If >0, wrap classifier linears with DoRA (plain / cnn_attn / posepulse_bilstm_cnn / paper_riccio_bilstm_cnn). "
+        "Ignored for posepulse_diagram (single Linear classifier).",
+    )
+    ap.add_argument(
+        "--dora-head-alpha",
+        type=float,
+        default=8.0,
+        help="LoRA scaling alpha for DoRA head adapters when --dora-head-rank > 0.",
+    )
+    ap.add_argument(
+        "--no-dora-head",
+        action="store_true",
+        help="Legacy: with older posepulse presets, keep plain Linear heads. posepulse_diagram never uses DoRA.",
+    )
+    ap.add_argument("--cpu", action="store_true", help="Force CPU even if CUDA is available.")
     ap.add_argument(
         "--kaggle-angles-dir",
         default="",
-        help="If set, train from Kaggle pipeline NPZs ({stem}_biomechanics.npz + {stem}_labels.npz) "
-        "instead of --index-csv; windows are labeled by coarse exercise (phase suffix stripped).",
+        help="If set, train from Kaggle pipeline NPZs ({stem}_biomechanics.npz + {stem}_labels.npz; "
+        "for --feature-mode mixed also {stem}_keypoints.npz) instead of --index-csv; "
+        "windows labeled by coarse exercise (see --window-label).",
     )
     ap.add_argument(
         "--kaggle-stem",
@@ -662,10 +860,19 @@ def add_bilstm_train_args(ap: argparse.ArgumentParser) -> None:
         help="TfidfVectorizer max_features for coaching text.",
     )
     ap.add_argument(
+        "--window-label",
+        choices=("first", "last"),
+        default="last",
+        help="Kaggle sliding windows: class from first or last frame in the window (PosePulse uses first).",
+    )
+    ap.add_argument(
         "--architecture",
-        choices=("plain", "cnn_attn"),
+        choices=("plain", "cnn_attn", "posepulse_bilstm_cnn", "posepulse_diagram", "paper_riccio_bilstm_cnn"),
         default="plain",
-        help="plain: BiLSTM+mean pool; cnn_attn: dilated1D CNN → BiLSTM → multi-head self-attention.",
+        help="plain: BiLSTM+mean pool; cnn_attn: dilated1D CNN → BiLSTM → MHA; "
+        "posepulse_bilstm_cnn: legacy small BiLSTM→Conv (quality head); "
+        "posepulse_diagram: 2×128 BiLSTM, BN+Conv+GAP, classification only (cleaner ONNX / Netron). "
+        "paper_riccio_bilstm_cnn: 1×BiLSTM (4/dir), (1,30,8) Conv2D stack 128→256→64→1, CE-only.",
     )
     ap.add_argument(
         "--cnn-hidden",
@@ -683,6 +890,13 @@ def add_bilstm_train_args(ap: argparse.ArgumentParser) -> None:
         "--classification-only",
         action="store_true",
         help="Optimize classification only (sets --reg-weight 0).",
+    )
+    ap.add_argument(
+        "--exclude-classes",
+        type=str,
+        default="hammer curl",
+        help="Comma-separated coarse exercise names to omit from windows (Kaggle) or index rows. "
+        "Matching is case-insensitive; spaces/underscores normalized. Empty string = exclude none.",
     )
     ap.add_argument(
         "--balanced-class-weights",
@@ -708,6 +922,73 @@ def main() -> int:
         args.lr = 0.0004
         args.hidden = 73
         args.dropout = 0.2174
+    elif args.preset == "posepulse":
+        args.architecture = "posepulse_diagram"
+        args.feature_mode = "mixed"
+        args.window_label = "first"
+        args.standardize = True
+        args.reg_weight = 0.0
+        args.dropout = min(float(args.dropout), 0.2)
+        args.optimizer = "adam"
+        args.dora_head_rank = 0
+        args.dora_head_alpha = 8.0
+    elif args.preset == "paper_riccio":
+        args.architecture = "paper_riccio_bilstm_cnn"
+        args.feature_mode = "mixed"
+        args.window_label = "first"
+        args.standardize = True
+        args.reg_weight = 0.0
+        args.dropout = 0.0
+        args.optimizer = "adamw"
+        args.lr = 3e-4
+        args.weight_decay = 1e-4
+        args.batch_size = 64
+        args.epochs = 50
+        args.dora_head_rank = 8
+        args.dora_head_alpha = 8.0
+        args.label_smoothing = 0.1
+        args.grad_clip = 1.0
+        args.lr_scheduler = "cosine"
+        args.lr_eta_min = 3e-6
+    elif args.preset == "paper_posepulse_vit":
+        args.architecture = "paper_riccio_bilstm_cnn"
+        args.feature_mode = "vit_backbone"
+        args.window_label = "first"
+        args.standardize = True
+        args.reg_weight = 0.0
+        args.dropout = 0.0
+        args.optimizer = "adamw"
+        args.lr = 3e-4
+        args.weight_decay = 1e-4
+        args.batch_size = 64
+        args.epochs = 50
+        args.dora_head_rank = 8
+        args.dora_head_alpha = 8.0
+        args.label_smoothing = 0.1
+        args.grad_clip = 1.0
+        args.lr_scheduler = "cosine"
+        args.lr_eta_min = 3e-6
+    elif args.preset == "paper_posepulse_resnet":
+        args.architecture = "paper_riccio_bilstm_cnn"
+        args.feature_mode = "resnet_backbone"
+        args.window_label = "first"
+        args.standardize = True
+        args.reg_weight = 0.0
+        args.dropout = 0.0
+        args.optimizer = "adamw"
+        args.lr = 3e-4
+        args.weight_decay = 1e-4
+        args.batch_size = 64
+        args.epochs = 50
+        args.dora_head_rank = 8
+        args.dora_head_alpha = 8.0
+        args.label_smoothing = 0.1
+        args.grad_clip = 1.0
+        args.lr_scheduler = "cosine"
+        args.lr_eta_min = 3e-6
+
+    if getattr(args, "no_dora_head", False):
+        args.dora_head_rank = 0
 
     device = torch.device("cpu" if args.cpu or not torch.cuda.is_available() else "cuda")
 
@@ -748,6 +1029,13 @@ def main() -> int:
         cnn_hidden=args.cnn_hidden,
         attn_heads=args.attn_heads,
         ce_class_weights=ce_w,
+        optimizer_kind=str(args.optimizer),
+        dora_head_rank=int(args.dora_head_rank),
+        dora_head_alpha=float(args.dora_head_alpha),
+        label_smoothing=float(args.label_smoothing),
+        grad_clip_max_norm=float(args.grad_clip),
+        use_cosine_schedule=(str(args.lr_scheduler) == "cosine"),
+        lr_eta_min=float(args.lr_eta_min),
     )
     best_acc = res["best_val_acc"]
     ckpt_path = out_dir / "exercise_bilstm_best.pt"
@@ -772,9 +1060,13 @@ def main() -> int:
             detailed=True,
             class_names=classes,
         )
-        print(
-            f"Test acc={ta:.4f}  quality RMSE={trmse:.4f}  MAE={treg['mae']:.4f}  R²={treg['r2']:.4f}"
-        )
+        has_q = getattr(model, "has_regression_head", True)
+        if has_q:
+            print(
+                f"Test acc={ta:.4f}  quality RMSE={trmse:.4f}  MAE={treg['mae']:.4f}  R²={treg['r2']:.4f}"
+            )
+        else:
+            print(f"Test acc={ta:.4f}  (classification-only; no quality head)")
         print(f"  F1 (macro)={test_cls['f1_macro']:.4f}  recall (macro)={test_cls['recall_macro']:.4f}")
         print("  Per-class F1:", test_cls["f1_per_class"])
         from fitness_coach.evaluation.classification_metrics import format_confusion_matrix_text
@@ -803,9 +1095,19 @@ def main() -> int:
                     "precision_per_class": test_cls["precision_per_class"],
                     "confusion_matrix": test_cls["confusion_matrix"],
                     "confusion_matrix_note": test_cls["confusion_matrix_note"],
-                    "quality_rmse": treg["rmse"],
-                    "quality_mae": treg["mae"],
-                    "quality_r2": treg["r2"],
+                    **(
+                        {
+                            "quality_rmse": treg["rmse"],
+                            "quality_mae": treg["mae"],
+                            "quality_r2": treg["r2"],
+                        }
+                        if has_q
+                        else {
+                            "quality_rmse": None,
+                            "quality_mae": None,
+                            "quality_r2": None,
+                        }
+                    ),
                 },
                 f,
                 indent=2,

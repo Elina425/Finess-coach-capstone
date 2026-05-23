@@ -1,0 +1,198 @@
+<svg width="100%" viewBox="0 0 1000 660" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue', Arial, sans-serif">
+  <title>PosePulse training configuration — BiLSTM-CNN and xLSTM[7:1]</title>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M2 1L9 5L2 9" fill="none" stroke="#666" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <style>
+    .title    { font-size: 16px; font-weight: 700; fill: #111; text-anchor: middle; }
+    .sectlbl  { font-size: 10.5px; font-weight: 700; fill: #888; letter-spacing: 1.5px; }
+    .blbl     { font-size: 12.5px; font-weight: 700; fill: #111; text-anchor: middle; }
+    .sub      { font-size: 11px; fill: #555; text-anchor: middle; }
+    .small    { font-size: 10px; fill: #666; text-anchor: middle; }
+    .axis     { font-size: 10px; fill: #555; }
+    .flow     { stroke: #888; stroke-width: 1.6; fill: none; }
+    .keyword  { font-size: 11.5px; fill: #0e3d70; font-weight: 600; }
+    .val      { font-size: 11.5px; fill: #111; font-family: 'Courier New', monospace; }
+    .row-hdr  { font-size: 11px; font-weight: 700; fill: #444; }
+    .splitbar { stroke: #ccc; stroke-width: 0.6; }
+  </style>
+
+  <!-- TITLE -->
+  <text x="500" y="28" class="title">Training Configuration — identical for BiLSTM-CNN and xLSTM[7:1]</text>
+
+  <!-- ============ ROW 1 : DATA PIPELINE ============ -->
+  <text x="34" y="60" class="sectlbl">1 · DATA</text>
+  <line x1="34" y1="68" x2="966" y2="68" stroke="#ddd" stroke-width="0.7"/>
+
+  <!-- Riccio corpus -->
+  <rect x="34" y="80" width="170" height="64" rx="8" fill="#f1efe8" stroke="#7a786e" stroke-width="1"/>
+  <text x="119" y="100" class="blbl">Riccio corpus</text>
+  <text x="119" y="116" class="sub">4 classes</text>
+  <text x="119" y="132" class="small">squat · push-up · shoulder press · bicep curl</text>
+
+  <line x1="204" y1="112" x2="232" y2="112" class="flow" marker-end="url(#arr)"/>
+
+  <!-- Per-video split bar -->
+  <rect x="234" y="80" width="240" height="64" rx="8" fill="#fff" stroke="#1f5fa6" stroke-width="1.2"/>
+  <text x="354" y="98" class="blbl" style="fill:#0e3d70">per-video split 70/15/15</text>
+  <!-- Visual split bar -->
+  <g>
+    <rect x="248" y="108" width="156" height="14" fill="#cfe1f5" stroke="#1f5fa6" stroke-width="0.6"/>
+    <rect x="404" y="108" width="33"  height="14" fill="#a5cdee" stroke="#1f5fa6" stroke-width="0.6"/>
+    <rect x="437" y="108" width="33"  height="14" fill="#7bb5e3" stroke="#1f5fa6" stroke-width="0.6"/>
+    <text x="326" y="118" class="small" style="fill:#0e3d70; font-weight:700">train</text>
+    <text x="420" y="118" class="small" style="fill:#0e3d70; font-weight:700">val</text>
+    <text x="453" y="118" class="small" style="fill:#0e3d70; font-weight:700">test</text>
+  </g>
+  <text x="354" y="138" class="small">stratified per video → no clip leakage</text>
+
+  <line x1="474" y1="112" x2="502" y2="112" class="flow" marker-end="url(#arr)"/>
+
+  <!-- Window counts -->
+  <rect x="504" y="80" width="200" height="64" rx="8" fill="#fff" stroke="#444" stroke-width="1"/>
+  <text x="604" y="98" class="blbl">windows after slicing</text>
+  <text x="544" y="116" class="row-hdr">train</text>
+  <text x="608" y="116" class="row-hdr">val</text>
+  <text x="664" y="116" class="row-hdr">test</text>
+  <text x="544" y="132" class="val" style="font-weight:700;">7,574</text>
+  <text x="608" y="132" class="val" style="font-weight:700;">1,802</text>
+  <text x="664" y="132" class="val" style="font-weight:700;">1,678</text>
+
+  <line x1="704" y1="112" x2="732" y2="112" class="flow" marker-end="url(#arr)"/>
+
+  <!-- Window specs -->
+  <rect x="734" y="80" width="232" height="64" rx="8" fill="#fffdf5" stroke="#a8742a" stroke-width="1"/>
+  <text x="850" y="100" class="blbl" style="fill:#6a4d00">window = 30 frames</text>
+  <text x="850" y="118" class="sub" style="fill:#a8742a">stride = 15 (50% overlap)</text>
+  <text x="850" y="134" class="small" style="fill:#a8742a">hammer curl excluded (paper default)</text>
+
+  <!-- ============ ROW 2 : FEATURE STANDARDISATION ============ -->
+  <text x="34" y="178" class="sectlbl">2 · FEATURES</text>
+  <line x1="34" y1="186" x2="966" y2="186" stroke="#ddd" stroke-width="0.7"/>
+
+  <rect x="34" y="200" width="200" height="56" rx="8" fill="#eeedfe" stroke="#534ab7" stroke-width="1"/>
+  <text x="134" y="220" class="blbl" style="fill:#3c3489">ViTPose-S features</text>
+  <text x="134" y="236" class="sub" style="fill:#534ab7">256-d per frame · frozen encoder</text>
+  <text x="134" y="250" class="small" style="fill:#534ab7">F ∈ ℝ^(T × 256)</text>
+
+  <line x1="234" y1="228" x2="262" y2="228" class="flow" marker-end="url(#arr)"/>
+
+  <rect x="264" y="200" width="200" height="56" rx="8" fill="#fff" stroke="#444" stroke-width="1"/>
+  <text x="364" y="220" class="blbl">Standardise</text>
+  <text x="364" y="236" class="sub">zero mean / unit variance</text>
+  <text x="364" y="250" class="small">μ, σ fit on train only · no leakage</text>
+
+  <line x1="464" y1="228" x2="492" y2="228" class="flow" marker-end="url(#arr)"/>
+
+  <rect x="494" y="200" width="240" height="56" rx="8" fill="#fff" stroke="#1f5fa6" stroke-width="1"/>
+  <text x="614" y="220" class="blbl" style="fill:#0e3d70">standardised windows</text>
+  <text x="614" y="240" class="val" style="font-size:12px;">x ∈ ℝ^(N × 30 × 256)</text>
+
+  <line x1="734" y1="228" x2="762" y2="228" class="flow" marker-end="url(#arr)"/>
+
+  <rect x="764" y="200" width="202" height="56" rx="8" fill="#e6f4ea" stroke="#1e7c3a" stroke-width="1.2"/>
+  <text x="865" y="220" class="blbl" style="fill:#0e5527">model (BiLSTM-CNN | xLSTM)</text>
+  <text x="865" y="240" class="sub" style="fill:#1e7c3a">identical inputs to both</text>
+
+  <!-- ============ ROW 3 : OPTIMIZER + SCHEDULE + LOSS (panels) ============ -->
+  <text x="34" y="290" class="sectlbl">3 · OPTIMISATION</text>
+  <line x1="34" y1="298" x2="966" y2="298" stroke="#ddd" stroke-width="0.7"/>
+
+  <!-- LEFT PANEL: optimiser -->
+  <rect x="34" y="312" width="290" height="170" rx="8" fill="#fff" stroke="#1f5fa6" stroke-width="1.2"/>
+  <text x="179" y="332" class="blbl" style="fill:#0e3d70">AdamW optimiser</text>
+  <line x1="50" y1="340" x2="308" y2="340" stroke="#1f5fa6" stroke-width="0.5"/>
+  <text x="60"  y="362" class="keyword">learning rate</text>      <text x="290" y="362" class="val" text-anchor="end">3 × 10⁻⁴</text>
+  <text x="60"  y="384" class="keyword">β₁, β₂</text>             <text x="290" y="384" class="val" text-anchor="end">0.9, 0.999</text>
+  <text x="60"  y="406" class="keyword">ε</text>                  <text x="290" y="406" class="val" text-anchor="end">10⁻⁸</text>
+  <text x="60"  y="428" class="keyword">weight decay</text>       <text x="290" y="428" class="val" text-anchor="end">1 × 10⁻⁴</text>
+  <text x="60"  y="450" class="keyword">grad-norm clip</text>     <text x="290" y="450" class="val" text-anchor="end">1.0</text>
+  <text x="60"  y="472" class="keyword">batch size</text>         <text x="290" y="472" class="val" text-anchor="end">64</text>
+
+  <!-- MIDDLE PANEL: LR schedule curve -->
+  <rect x="338" y="312" width="324" height="170" rx="8" fill="#fffdf5" stroke="#a8742a" stroke-width="1.2"/>
+  <text x="500" y="332" class="blbl" style="fill:#6a4d00">LR schedule</text>
+  <line x1="354" y1="340" x2="646" y2="340" stroke="#a8742a" stroke-width="0.5"/>
+
+  <!-- Axes for LR plot -->
+  <line x1="362" y1="445" x2="640" y2="445" stroke="#999" stroke-width="0.7"/> <!-- x axis -->
+  <line x1="362" y1="358" x2="362" y2="445" stroke="#999" stroke-width="0.7"/> <!-- y axis -->
+  <text x="358" y="362" class="axis" text-anchor="end">3e-4</text>
+  <text x="358" y="445" class="axis" text-anchor="end">3e-6</text>
+  <text x="362" y="462" class="axis" text-anchor="middle">0</text>
+  <text x="640" y="462" class="axis" text-anchor="middle">50</text>
+  <text x="500" y="475" class="small">epoch</text>
+
+  <!-- Warmup line (linear) + cosine decay  (warmup 10%, total 50 ep) -->
+  <!-- Warmup from epoch 0 to ~5 (x from 362 to 390), y from 445 to 360 -->
+  <line x1="362" y1="445" x2="390" y2="360" stroke="#c83232" stroke-width="2.2" fill="none"/>
+  <!-- Cosine decay from (390, 360) curving to (640, 442) — three control points -->
+  <path d="M 390 360 C 440 360, 540 442, 640 443" stroke="#c83232" stroke-width="2.2" fill="none"/>
+  <!-- Mark warmup region -->
+  <line x1="390" y1="358" x2="390" y2="445" stroke="#a8742a" stroke-width="0.4" stroke-dasharray="2,2"/>
+  <text x="376" y="354" class="small" style="fill:#a8742a">10% warmup</text>
+  <text x="510" y="395" class="small" style="fill:#c83232">cosine decay</text>
+
+  <!-- RIGHT PANEL: loss + checkpoint -->
+  <rect x="676" y="312" width="290" height="170" rx="8" fill="#fff" stroke="#1e7c3a" stroke-width="1.2"/>
+  <text x="821" y="332" class="blbl" style="fill:#0e5527">loss + checkpoint</text>
+  <line x1="692" y1="340" x2="950" y2="340" stroke="#1e7c3a" stroke-width="0.5"/>
+  <text x="702" y="362" class="keyword" style="fill:#0e5527">loss</text>                <text x="932" y="362" class="val" text-anchor="end">cross-entropy</text>
+  <text x="702" y="384" class="keyword" style="fill:#0e5527">label smoothing</text>     <text x="932" y="384" class="val" text-anchor="end">0.1</text>
+  <text x="702" y="406" class="keyword" style="fill:#0e5527">epochs</text>              <text x="932" y="406" class="val" text-anchor="end">50</text>
+  <text x="702" y="428" class="keyword" style="fill:#0e5527">EMA decay</text>           <text x="932" y="428" class="val" text-anchor="end">0.999</text>
+  <text x="702" y="450" class="keyword" style="fill:#0e5527">best ckpt</text>           <text x="932" y="450" class="val" text-anchor="end">max val_acc</text>
+  <text x="702" y="472" class="keyword" style="fill:#0e5527">eval weights</text>        <text x="932" y="472" class="val" text-anchor="end">EMA</text>
+
+  <!-- ============ ROW 4 : TRAINING LOOP DIAGRAM ============ -->
+  <text x="34" y="514" class="sectlbl">4 · TRAINING STEP</text>
+  <line x1="34" y1="522" x2="966" y2="522" stroke="#ddd" stroke-width="0.7"/>
+
+  <!-- Step boxes -->
+  <g>
+    <rect x="34" y="536" width="130" height="48" rx="6" fill="#f1efe8" stroke="#5f5e5a" stroke-width="0.8"/>
+    <text x="99" y="558" class="blbl">batch (64)</text>
+    <text x="99" y="572" class="sub">(N, 30, 256)</text>
+
+    <line x1="164" y1="560" x2="186" y2="560" class="flow" marker-end="url(#arr)"/>
+
+    <rect x="188" y="536" width="130" height="48" rx="6" fill="#e6f4ea" stroke="#1e7c3a" stroke-width="0.8"/>
+    <text x="253" y="558" class="blbl" style="fill:#0e5527">forward</text>
+    <text x="253" y="572" class="sub" style="fill:#1e7c3a">logits, loss</text>
+
+    <line x1="318" y1="560" x2="340" y2="560" class="flow" marker-end="url(#arr)"/>
+
+    <rect x="342" y="536" width="148" height="48" rx="6" fill="#e3f0ff" stroke="#1f5fa6" stroke-width="0.8"/>
+    <text x="416" y="558" class="blbl" style="fill:#0e3d70">backward</text>
+    <text x="416" y="572" class="sub" style="fill:#1f5fa6">clip ‖∇‖ ≤ 1.0</text>
+
+    <line x1="490" y1="560" x2="512" y2="560" class="flow" marker-end="url(#arr)"/>
+
+    <rect x="514" y="536" width="148" height="48" rx="6" fill="#fffdf5" stroke="#a8742a" stroke-width="0.8"/>
+    <text x="588" y="558" class="blbl" style="fill:#6a4d00">AdamW step</text>
+    <text x="588" y="572" class="sub" style="fill:#a8742a">scheduler.step()</text>
+
+    <line x1="662" y1="560" x2="684" y2="560" class="flow" marker-end="url(#arr)"/>
+
+    <rect x="686" y="536" width="148" height="48" rx="6" fill="#fde7ee" stroke="#a8266a" stroke-width="0.8"/>
+    <text x="760" y="558" class="blbl" style="fill:#71174a">EMA update</text>
+    <text x="760" y="572" class="sub" style="fill:#a8266a">θ_ema ← 0.999·θ_ema + 0.001·θ</text>
+
+    <line x1="834" y1="560" x2="856" y2="560" class="flow" marker-end="url(#arr)"/>
+
+    <rect x="858" y="536" width="108" height="48" rx="6" fill="#fff" stroke="#444" stroke-width="0.8"/>
+    <text x="912" y="558" class="blbl">next batch</text>
+    <text x="912" y="572" class="sub">↻</text>
+  </g>
+
+  <!-- ============ ROW 5 : EVAL ============ -->
+  <text x="34" y="610" class="sectlbl">5 · EVAL (each epoch)</text>
+  <line x1="34" y1="618" x2="966" y2="618" stroke="#ddd" stroke-width="0.7"/>
+
+  <rect x="34" y="630" width="932" height="22" rx="6" fill="#fafafa" stroke="#ccc" stroke-width="0.8"/>
+  <text x="500" y="646" class="sub">
+    swap EMA weights into model  →  forward on val set  →  if val_acc &gt; best, save checkpoint  →  restore live weights
+  </text>
+</svg>

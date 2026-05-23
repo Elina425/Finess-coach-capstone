@@ -18,8 +18,10 @@ Hyperparameters per paper §3.3.3:
   loss                = CrossEntropy with label smoothing 0.1
   best-ckpt           = max val accuracy
 
-Both models receive the same 30-frame windows of ViTPose-S features ``(N, 30, 256)``.
-Pass ``--feature-dim 42`` to train on the legacy angle-only feature set instead.
+Both models receive the same window length of per-frame features ``(N, T, D)``.
+Riccio NPZs: use ``--kaggle-encoding frame`` for ``frame_features`` (ViT/ResNet);
+``angles`` (8-D) or ``mixed`` (42-D) for YOLO/pose keypoint pipelines.
+``--feature-dim`` is inferred from the chosen encoding when using ``--kaggle-angles-dir``.
 """
 
 from __future__ import annotations
@@ -42,7 +44,9 @@ from torch.utils.data import DataLoader
 from fitness_coach.datasets.exercise_bilstm_dataset import (
     ExerciseAngleWindowDataset, build_class_map, load_index_rows,
     fit_standardizer_from_dataset, make_windows, load_angles_npz,
+    build_kaggle_angle_datasets,
     build_kaggle_frame_feature_datasets,
+    build_kaggle_mixed_datasets,
 )
 from fitness_coach.evaluation.classification_metrics import (
     classification_report_with_roc_proba,
@@ -50,6 +54,50 @@ from fitness_coach.evaluation.classification_metrics import (
 )
 from fitness_coach.models.exercise_bilstm_model import ExerciseBiLSTMCNN
 from fitness_coach.models.xlstm_model import xLSTMExerciseClassifier
+
+
+def load_shape_compatible_state_dict(
+    model: nn.Module,
+    ckpt_path: Path,
+    device: torch.device,
+    label: str,
+) -> int:
+    """Load overlapping weights from a ``{model, name, args}`` checkpoint.
+
+    Skips keys missing in ``model`` or with tensor shape mismatch (e.g. 4-class → 2-class head).
+    Returns number of tensors successfully copied.
+    """
+    path = ckpt_path.expanduser()
+    try:
+        ck = torch.load(path, map_location=device, weights_only=False)
+    except TypeError:
+        ck = torch.load(path, map_location=device)
+    if not isinstance(ck, dict) or "model" not in ck:
+        raise ValueError(f"{label}: expected dict with 'model' key in {path}")
+    sd_in = ck["model"]
+    sd_tgt = model.state_dict()
+    loadable: Dict[str, torch.Tensor] = {}
+    skipped_shape: List[str] = []
+    skipped_absent: List[str] = []
+    for k, v in sd_in.items():
+        if k not in sd_tgt:
+            skipped_absent.append(k)
+            continue
+        if v.shape != sd_tgt[k].shape:
+            skipped_shape.append(f"{k} ({tuple(v.shape)} → need {tuple(sd_tgt[k].shape)})")
+            continue
+        loadable[k] = v
+    model.load_state_dict(loadable, strict=False)
+    print(
+        f"[{label}] init from {path.name}: loaded {len(loadable)}/{len(sd_in)} tensors; "
+        f"skipped {len(skipped_absent)} absent, {len(skipped_shape)} shape-mismatch"
+    )
+    if skipped_shape[:5]:
+        for s in skipped_shape[:5]:
+            print(f"  skip: {s}")
+        if len(skipped_shape) > 5:
+            print(f"  … and {len(skipped_shape) - 5} more shape mismatches")
+    return len(loadable)
 
 
 # ──────────────────────────────────────────────────────────────────── CLI
@@ -64,9 +112,23 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Directory of per-clip *.npz feature files (angles or ViTPose embeddings).")
     p.add_argument("--kaggle-angles-dir", type=Path, default=None,
                    help="Combined Riccio-pipeline output dir containing {stem}_biomechanics.npz "
-                        "and {stem}_labels.npz (frame_features + video_id).")
+                        "and {stem}_labels.npz; optional {stem}_keypoints.npz for mixed encoding.")
     p.add_argument("--kaggle-stem", type=str, default="riccio_realtime_exercise_recognition",
                    help="Stem of the combined NPZ files in --kaggle-angles-dir.")
+    p.add_argument(
+        "--kaggle-encoding",
+        choices=("auto", "frame", "angles", "mixed"),
+        default="auto",
+        help="Which arrays to read from *_biomechanics.npz: auto uses frame_features if present; "
+             "else angles+coords (42-D mixed) when {stem}_keypoints.npz exists next to biomechanics; "
+             "else angles (8-D). frame / angles / mixed force that mode.",
+    )
+    p.add_argument(
+        "--kaggle-window-label",
+        choices=("first", "last"),
+        default="first",
+        help="Which frame sets the coarse class label for each sliding window.",
+    )
     p.add_argument("--exclude-classes", type=str, default="hammer curl",
                    help="Comma-separated coarse exercise names to exclude (case-insensitive). "
                         "Empty string = exclude none.")
@@ -74,7 +136,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--kaggle-val-ratio",  type=float, default=0.15)
     p.add_argument("--kaggle-seed",       type=int,   default=42)
     p.add_argument("--feature-dim", type=int, default=256,
-                   help="Per-frame feature dim. 256 = ViTPose-S, 42 = angles. Default 256.")
+                   help="Per-frame D (last dim of (T,D)). With --kaggle-angles-dir, D is usually "
+                        "set from the NPZ (8 / 42 / embedding dim); this flag is overridden when it mismatches.")
     p.add_argument("--seq-len",    type=int, default=30)
     p.add_argument("--stride",     type=int, default=15)
     p.add_argument("--num-classes", type=int, default=4)
@@ -98,8 +161,45 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--xlstm-projection-factor", type=float, default=4.0 / 3.0)
     p.add_argument("--dropout",       type=float, default=0.15)
 
+    p.add_argument(
+        "--xlstm-pool",
+        choices=("mean", "last", "attention"),
+        default="mean",
+        help="Temporal readout after causal xLSTM: **last** = final timestep (uses full prefix); "
+             "**mean** = global average (default); **attention** = learned softmax over time.",
+    )
+    p.add_argument(
+        "--xlstm-attention-pool",
+        action="store_true",
+        help="Deprecated: same as ``--xlstm-pool attention`` (overrides ``--xlstm-pool``).",
+    )
+    p.add_argument(
+        "--xlstm-input-dropout",
+        type=float,
+        default=0.0,
+        help="Dropout on frame features **before** xLSTM (e.g. 0.05). 0 disables.",
+    )
+    p.add_argument(
+        "--xlstm-linear-classifier",
+        action="store_true",
+        help="Single Linear classification head instead of the default 2-layer MLP.",
+    )
+
     p.add_argument("--models", nargs="+", choices=("bilstm", "xlstm"),
                    default=("bilstm", "xlstm"))
+    p.add_argument(
+        "--init-bilstm-from",
+        type=Path,
+        default=None,
+        help="Optional ``best.pt`` / ``exercise_bilstm_best.pt`` with ``model`` key: load shape-compatible "
+        "weights before training (backbone survives 4→K class head change).",
+    )
+    p.add_argument(
+        "--init-xlstm-from",
+        type=Path,
+        default=None,
+        help="Optional xLSTM checkpoint; same partial-load rules as --init-bilstm-from.",
+    )
     p.add_argument("--cpu", action="store_true")
     p.add_argument("--seed", type=int, default=42)
 
@@ -185,30 +285,110 @@ class ModelEMA:
         return {k: v.clone() for k, v in self.shadow.items()}
 
 
+def _first_window_feature_dim(train_ds) -> int:
+    if train_ds is None or len(train_ds) == 0:
+        raise ValueError("empty train dataset")
+    if hasattr(train_ds, "samples") and train_ds.samples:
+        w0 = train_ds.samples[0][0]
+        return int(np.asarray(w0).shape[-1])
+    x0 = train_ds[0]
+    x = x0[0] if isinstance(x0, (tuple, list)) else x0
+    if hasattr(x, "numpy"):
+        x = x.numpy()
+    return int(np.asarray(x).shape[-1])
+
+
+def _resolve_kaggle_encoding(
+    args: argparse.Namespace,
+    bio_files: set,
+    keypoints_path: Path,
+) -> str:
+    """Return one of frame | angles | mixed after validating NPZ layout."""
+    enc = str(args.kaggle_encoding)
+    if enc == "auto":
+        if "frame_features" in bio_files:
+            return "frame"
+        if (
+            keypoints_path.is_file()
+            and "angles" in bio_files
+        ):
+            return "mixed"
+        if "angles" in bio_files:
+            return "angles"
+        raise ValueError(
+            f"{args.kaggle_stem}_biomechanics.npz must contain 'frame_features' or 'angles'"
+        )
+    if enc == "frame":
+        if "frame_features" not in bio_files:
+            raise ValueError("kaggle-encoding=frame requires 'frame_features' in biomechanics NPZ")
+        return "frame"
+    if enc == "angles":
+        if "angles" not in bio_files:
+            raise ValueError("kaggle-encoding=angles requires 'angles' in biomechanics NPZ")
+        return "angles"
+    # mixed
+    if not keypoints_path.is_file():
+        raise FileNotFoundError(
+            f"{keypoints_path.name} not found — use mixed only with "
+            "riccio_kaggle_video_pipeline export that saves *_keypoints.npz (no --skip-keypoints)"
+        )
+    if "angles" not in bio_files:
+        raise ValueError("kaggle-encoding=mixed requires 'angles' in biomechanics NPZ")
+    return "mixed"
+
+
 def build_datasets(args: argparse.Namespace):
     """Returns (train_ds, val_ds, test_ds, class_map). Supports two input modes:
 
-    1. Riccio combined-NPZ (``--kaggle-angles-dir``): one ``*_biomechanics.npz``
-       holding ``frame_features (T, D)`` plus ``*_labels.npz`` with ``pose`` +
-       ``video_id``. Splits are stratified per-video.
+    1. Riccio combined-NPZ (``--kaggle-angles-dir``): ``*_biomechanics.npz`` may hold
+       ``frame_features (T, D)``, ``angles (T, 8)``, and with ``*_keypoints.npz`` use
+       ``--kaggle-encoding mixed`` for 42-D windows. Splits stratified per-video.
     2. Per-clip index CSV (``--index-csv`` + ``--features-dir``).
     """
     if args.kaggle_angles_dir is not None:
         exc = [s.strip() for s in (args.exclude_classes or "").split(",") if s.strip()]
-        train_ds, val_ds, test_ds, class_to_idx, _idx_to_class, _mean, _std = (
-            build_kaggle_frame_feature_datasets(
-                Path(args.kaggle_angles_dir),
-                stem=args.kaggle_stem,
-                window=args.seq_len,
-                stride=args.stride,
-                test_ratio=args.kaggle_test_ratio,
-                val_ratio=args.kaggle_val_ratio,
-                seed=args.kaggle_seed,
-                standardize=True,
-                window_label="first",
-                exclude_coarse_classes=exc or None,
-            )
+        base = Path(args.kaggle_angles_dir)
+        stem = args.kaggle_stem
+        bio_path = base / f"{stem}_biomechanics.npz"
+        if not bio_path.is_file():
+            raise FileNotFoundError(bio_path)
+        kp_path = base / f"{stem}_keypoints.npz"
+        with np.load(bio_path, allow_pickle=True) as d0:
+            bio_files = set(d0.files)
+        enc = _resolve_kaggle_encoding(args, bio_files, kp_path)
+        wl = str(args.kaggle_window_label)
+        common = dict(
+            stem=stem,
+            window=args.seq_len,
+            stride=args.stride,
+            test_ratio=args.kaggle_test_ratio,
+            val_ratio=args.kaggle_val_ratio,
+            seed=args.kaggle_seed,
+            standardize=True,
+            window_label=wl,
+            exclude_coarse_classes=exc or None,
         )
+        if enc == "frame":
+            train_ds, val_ds, test_ds, class_to_idx, _idx_to_class, _mean, _std = (
+                build_kaggle_frame_feature_datasets(base, **common)
+            )
+        elif enc == "angles":
+            train_ds, val_ds, test_ds, class_to_idx, _idx_to_class, _mean, _std = (
+                build_kaggle_angle_datasets(base, **common)
+            )
+        else:
+            train_ds, val_ds, test_ds, class_to_idx, _idx_to_class, _mean, _std = (
+                build_kaggle_mixed_datasets(base, **common)
+            )
+        fd = _first_window_feature_dim(train_ds)
+        cli_enc = str(args.kaggle_encoding)
+        cli_requested = cli_enc != "auto"
+        suffix = ""
+        if cli_requested and int(args.feature_dim) != fd:
+            suffix = f"  (adjusted from CLI --feature-dim {args.feature_dim})"
+        auto_note = "" if cli_requested else " (auto)"
+        print(f"[setup] kaggle encoding={enc}{auto_note}  per-frame D={fd}{suffix}")
+        args.feature_dim = fd
         if len(class_to_idx) != args.num_classes:
             print(f"[warn] kaggle data has {len(class_to_idx)} classes — overriding --num-classes")
             args.num_classes = len(class_to_idx)
@@ -279,45 +459,56 @@ def train_one(
     best_acc = -1.0
     best_state = None
     history: List[Dict[str, float]] = []
+    interrupted = False
 
-    for epoch in range(1, args.epochs + 1):
-        model.train()
-        running, seen, correct = 0.0, 0, 0
-        for batch in train_loader:
-            x, y = _unpack(batch, device)
-            optim.zero_grad()
-            logits = _logits(model(x))
-            loss = loss_fn(logits, y)
-            loss.backward()
-            if args.grad_clip > 0:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
-            optim.step(); sched.step()
-            if ema is not None:
-                ema.update(model)
-            running += float(loss.item()) * x.size(0)
-            seen    += x.size(0)
-            correct += int((logits.argmax(1) == y).sum().item())
-        train_loss = running / max(1, seen)
-        train_acc  = correct / max(1, seen)
+    try:
+        for epoch in range(1, args.epochs + 1):
+            model.train()
+            running, seen, correct = 0.0, 0, 0
+            for batch in train_loader:
+                x, y = _unpack(batch, device)
+                optim.zero_grad()
+                logits = _logits(model(x))
+                loss = loss_fn(logits, y)
+                loss.backward()
+                if args.grad_clip > 0:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+                optim.step(); sched.step()
+                if ema is not None:
+                    ema.update(model)
+                running += float(loss.item()) * x.size(0)
+                seen += x.size(0)
+                correct += int((logits.argmax(1) == y).sum().item())
+            train_loss = running / max(1, seen)
+            train_acc = correct / max(1, seen)
 
-        val_acc, val_f1 = _evaluate_with_ema(model, ema, val_loader, device)
-        history.append({"epoch": epoch, "train_loss": train_loss, "train_acc": train_acc,
-                        "val_acc": val_acc, "val_f1": val_f1, "lr": optim.param_groups[0]["lr"]})
-        print(f"[{name}] epoch {epoch:03d} loss={train_loss:.4f} train_acc={train_acc:.4f} "
-              f"val_acc={val_acc:.4f} val_f1={val_f1:.4f}  lr={optim.param_groups[0]['lr']:.2e}")
-        if val_acc > best_acc:
-            best_acc = val_acc
-            # Snapshot whichever weights produced the val_acc we just measured.
-            # With EMA on, that's the EMA shadow merged with raw buffers from the
-            # live model (BN running stats etc.); without EMA, the live model.
-            snapshot_src = model.state_dict()
-            if ema is not None:
-                snapshot_src = {**snapshot_src, **ema.state_dict()}
-            best_state = {k: v.detach().cpu().clone() for k, v in snapshot_src.items()}
+            val_acc, val_f1, val_loss = _evaluate_with_ema(
+                model, ema, val_loader, device, loss_fn=loss_fn
+            )
+            history.append({"epoch": epoch, "train_loss": train_loss, "train_acc": train_acc,
+                            "val_acc": val_acc, "val_f1": val_f1, "val_loss": val_loss,
+                            "lr": optim.param_groups[0]["lr"]})
+            print(f"[{name}] epoch {epoch:03d} train_loss={train_loss:.4f} val_loss={val_loss:.4f} "
+                  f"train_acc={train_acc:.4f} val_acc={val_acc:.4f} val_f1={val_f1:.4f}  "
+                  f"lr={optim.param_groups[0]['lr']:.2e}")
+            if val_acc > best_acc:
+                best_acc = val_acc
+                snapshot_src = model.state_dict()
+                if ema is not None:
+                    snapshot_src = {**snapshot_src, **ema.state_dict()}
+                best_state = {k: v.detach().cpu().clone() for k, v in snapshot_src.items()}
+    except KeyboardInterrupt:
+        interrupted = True
+        print(f"\n[{name}] KeyboardInterrupt — finalizing using best weights so far "
+              f"(best_val_acc={best_acc:.4f}).")
 
-    assert best_state is not None
+    if best_state is None:
+        raise RuntimeError(
+            f"[{name}] no validation checkpoint (stopped before first epoch finished?)."
+        )
+
     model.load_state_dict(best_state)
-    test_acc, test_f1 = _evaluate(model, test_loader, device)
+    test_acc, test_f1, _ = _evaluate(model, test_loader, device, loss_fn=None)
 
     y_true, y_pred, probs = np.array([]), np.array([]), np.empty((0, args.num_classes))
     if test_loader is not None and len(test_loader.dataset) > 0:
@@ -329,6 +520,8 @@ def train_one(
         report["quality_rmse"] = None
         report["quality_mae"] = None
         report["quality_r2"] = None
+        if interrupted:
+            report["training_interrupted_early"] = True
     else:
         report = {
             "split": "test",
@@ -344,9 +537,12 @@ def train_one(
     out_dir.mkdir(parents=True, exist_ok=True)
     torch.save({"model": best_state, "name": name, "args": vars(args)}, out_dir / "best.pt")
     (out_dir / "history.json").write_text(json.dumps(history, indent=2))
-    (out_dir / "metrics.json").write_text(json.dumps({
+    metrics_payload: Dict[str, Any] = {
         "best_val_acc": best_acc, "test_acc": test_acc, "test_f1": test_f1,
-    }, indent=2))
+    }
+    if interrupted:
+        metrics_payload["interrupted_early"] = True
+    (out_dir / "metrics.json").write_text(json.dumps(metrics_payload, indent=2))
     (out_dir / "test_classification_metrics.json").write_text(json.dumps(report, indent=2))
     if len(y_true) and not args.no_save_test_probs:
         np.savez(
@@ -470,34 +666,49 @@ def _evaluate_with_ema(
     ema: Optional["ModelEMA"],
     loader: DataLoader,
     device: torch.device,
-) -> Tuple[float, float]:
+    *,
+    loss_fn: Optional[nn.Module] = None,
+) -> Tuple[float, float, float]:
     """Evaluate with EMA weights if available, otherwise the live model.
 
     Swaps EMA shadow weights into the model for the eval pass, then restores
     the live training weights so the next epoch resumes normally.
+
+    ``val_loss`` (third return) uses ``loss_fn`` when provided — same formulation
+    as training (including label smoothing) for apples-to-apples train vs val loss.
     """
     if ema is None:
-        return _evaluate(model, loader, device)
+        return _evaluate(model, loader, device, loss_fn=loss_fn)
     backup = {k: v.detach().clone() for k, v in model.state_dict().items()
               if v.dtype.is_floating_point}
     try:
         merged = {**model.state_dict(), **ema.state_dict()}
         model.load_state_dict(merged, strict=False)
-        return _evaluate(model, loader, device)
+        return _evaluate(model, loader, device, loss_fn=loss_fn)
     finally:
         full = {**model.state_dict(), **backup}
         model.load_state_dict(full, strict=False)
 
 
 @torch.no_grad()
-def _evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> Tuple[float, float]:
+def _evaluate(
+    model: nn.Module,
+    loader: DataLoader,
+    device: torch.device,
+    *,
+    loss_fn: Optional[nn.Module] = None,
+) -> Tuple[float, float, float]:
     if loader is None or len(loader.dataset) == 0:
-        return float("nan"), float("nan")
+        return float("nan"), float("nan"), float("nan")
     model.eval()
     y_true, y_pred = [], []
+    running, seen = 0.0, 0
     for batch in loader:
         x, y = _unpack(batch, device)
         logits = _logits(model(x))
+        if loss_fn is not None:
+            running += float(loss_fn(logits, y).item()) * x.size(0)
+            seen += x.size(0)
         y_true.extend(y.cpu().numpy().tolist())
         y_pred.extend(logits.argmax(1).cpu().numpy().tolist())
     y_true = np.asarray(y_true); y_pred = np.asarray(y_pred)
@@ -507,7 +718,8 @@ def _evaluate(model: nn.Module, loader: DataLoader, device: torch.device) -> Tup
         f1 = float(f1_score(y_true, y_pred, average="macro", zero_division=0))
     except Exception:
         f1 = float("nan")
-    return acc, f1
+    val_loss = running / max(1, seen) if loss_fn is not None else float("nan")
+    return acc, f1, val_loss
 
 
 # ──────────────────────────────────────────────────────── driver
@@ -541,11 +753,29 @@ def main() -> int:
             dropout=args.dropout,
         ).to(device)
         print(f"[bilstm] params={sum(p.numel() for p in model.parameters()):,}")
+        if args.init_bilstm_from is not None:
+            load_shape_compatible_state_dict(model, args.init_bilstm_from, device, "bilstm_init")
         runs.append(train_one(
             model, "bilstm_cnn", train_loader, val_loader, test_loader, class_names_ordered, args, device,
         ))
 
     if "xlstm" in args.models:
+        pool_eff = str(args.xlstm_pool).strip().lower()
+        if bool(args.xlstm_attention_pool):
+            pool_eff = "attention"
+        xlstm_name = "xlstm_7_1"
+        extra = []
+        tag_map = {"attention": "attn", "last": "last", "mean": None}
+        pt = tag_map.get(pool_eff)
+        if pt:
+            extra.append(pt)
+        if getattr(args, "xlstm_linear_classifier", False):
+            extra.append("lin")
+        idr = float(getattr(args, "xlstm_input_dropout", 0.0) or 0.0)
+        if idr > 1e-8:
+            extra.append(f"id{int(round(idr * 100)):02d}")
+        if extra:
+            xlstm_name = xlstm_name + "_" + "_".join(extra)
         model = xLSTMExerciseClassifier(
             input_size=args.feature_dim, hidden_size=args.xlstm_hidden,
             num_classes=args.num_classes, dropout=args.dropout,
@@ -553,10 +783,19 @@ def main() -> int:
             projection_factor=args.xlstm_projection_factor,
             block_pattern=args.xlstm_block_pattern,
             num_error_tags=0,
+            use_attention_pool=bool(args.xlstm_attention_pool),
+            temporal_pool=str(args.xlstm_pool),
+            input_dropout=float(getattr(args, "xlstm_input_dropout", 0.0) or 0.0),
+            linear_classifier=bool(args.xlstm_linear_classifier),
         ).to(device)
-        print(f"[xlstm ] params={sum(p.numel() for p in model.parameters()):,}")
+        print(
+            f"[xlstm ] name={xlstm_name} params={sum(p.numel() for p in model.parameters()):,} "
+            f"pool={pool_eff} input_dropout={idr:g} linear_head={bool(args.xlstm_linear_classifier)}"
+        )
+        if args.init_xlstm_from is not None:
+            load_shape_compatible_state_dict(model, args.init_xlstm_from, device, "xlstm_init")
         runs.append(train_one(
-            model, "xlstm_7_1", train_loader, val_loader, test_loader, class_names_ordered, args, device,
+            model, xlstm_name, train_loader, val_loader, test_loader, class_names_ordered, args, device,
         ))
 
     summary = {"runs": runs, "class_map": class_map, "args": {k: str(v) for k, v in vars(args).items()}}

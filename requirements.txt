@@ -5,6 +5,10 @@ numpy>=1.21.0
 pandas>=1.3.0
 opencv-python>=4.5.0
 
+# Environment & Credentials
+python-dotenv>=0.19.0
+kaggle>=1.5.0
+
 # Pose Estimation Models
 # MediaPipe (lightweight, real-time)
 mediapipe>=0.8.0
@@ -17,6 +21,9 @@ torchvision>=0.10.0
 # RTMPose-X / ViTPose (RTMPose-m) / DETRPose (RTMO) via rtmlib — ONNXRuntime backends
 onnxruntime>=1.16.0
 rtmlib>=0.0.13
+# ViT crop embeddings: default ViTPose-S COCO 256-D (no extra packages beyond torch);
+# use ``--vit-encoder timm`` in riccio_kaggle_video_pipeline if you want ImageNet ViT via timm.
+timm>=0.9.0
 
 # OpenPose (most accurate, optional - requires separate system installation)
 # See: https://github.com/CMU-Perceptual-Computing-Lab/openpose
@@ -44,6 +51,11 @@ ijson>=3.2.0
 
 # Optional: Hugging Face gated datasets (e.g. EgoExo-Fitness index + download)
 huggingface_hub>=0.20.0
+
+# Comment-generation head for EgoExo (frozen Flan-T5-small, hybrid Approach B).
+# Only required when training with `--comment-head`.
+transformers>=4.30
+sentencepiece>=0.1.99
 
 # Optional: GPU acceleration
 # For NVIDIA GPU support (install one of these)

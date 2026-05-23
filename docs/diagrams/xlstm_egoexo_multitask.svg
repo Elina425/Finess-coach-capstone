@@ -1,137 +1,222 @@
-<svg width="100%" viewBox="0 0 900 900" role="img" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue', Arial, sans-serif">
-  <title>xLSTM[7:1] shared-encoder multi-task architecture — EgoExo-Fitness</title>
+<svg width="100%" viewBox="0 0 1100 1240" role="img" xmlns="http://www.w3.org/2000/svg" font-family="'Helvetica Neue', Arial, sans-serif">
+  <title>Branched Multi-Task xLSTM with Task-Specific Pooling (regression quality) — EgoExo-Fitness</title>
   <defs>
     <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M2 1L9 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+    <marker id="ar-bold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M1 1L9 5L1 9 Z" fill="context-stroke"/>
     </marker>
   </defs>
 
   <style>
     .lbl       { font-size: 13px; fill: #111; font-weight: 600; text-anchor: middle; }
     .sub       { font-size: 11px; fill: #555; text-anchor: middle; }
-    .shape     { font-size: 10.5px; fill: #666; font-style: italic; }
+    .shape     { font-size: 11px; fill: #666; font-style: italic; }
+    .hp        { font-size: 10.5px; fill: #3c3489; text-anchor: middle; }
     .out-lbl   { font-size: 13px; fill: #0e3d70; font-weight: 700; text-anchor: middle; }
     .flow      { stroke: #999; stroke-width: 1.6; fill: none; }
-    .flow-soft { stroke: #1f5fa6; stroke-width: 1.4; stroke-dasharray: 4 3; fill: none; }
-    .fusion-stroke { stroke: #a8266a; stroke-width: 1.8; fill: none; }
-    .share-mark { stroke: #1e7c3a; stroke-width: 1.3; fill: none; }
-    .title     { font-size: 15px; fill: #111; font-weight: 700; text-anchor: middle; }
+    .flow-a    { stroke: #1e7c3a; stroke-width: 2.2; fill: none; }
+    .flow-b    { stroke: #a87b00; stroke-width: 2.2; fill: none; }
+    .flow-key  { stroke: #5f5e5a; stroke-width: 2.0; fill: none; stroke-dasharray: 5 3; }
+    .title     { font-size: 16px; fill: #111; font-weight: 700; text-anchor: middle; }
   </style>
 
   <!-- TITLE -->
-  <text x="450" y="30" class="title">xLSTM[7:1] Shared-Encoder Architecture — EgoExo-Fitness</text>
+  <text x="550" y="32" class="title">Branched Multi-Task xLSTM with Task-Specific Pooling — EgoExo-Fitness</text>
+  <text x="550" y="50" class="sub" style="font-style:italic;">8 × mLSTM backbone · two attention pools · soft class-conditional quality regression · retrieval feedback</text>
 
-  <!-- INPUT -->
-  <rect x="310" y="50" width="180" height="40" rx="6" fill="#f1efe8" stroke="#7a786e" stroke-width="1"/>
-  <text x="400" y="75" class="lbl">Video Clip</text>
+  <!-- ===================================== SHARED BACKBONE ===================================== -->
 
-  <text x="502" y="108" class="shape">T frames</text>
-  <line x1="400" y1="90" x2="400" y2="118" class="flow" marker-end="url(#ar)"/>
+  <!-- Video Clip -->
+  <rect x="450" y="74" width="200" height="40" rx="6" fill="#f1efe8" stroke="#7a786e" stroke-width="1"/>
+  <text x="550" y="98" class="lbl">Video Clip</text>
+  <text x="665" y="103" class="shape" style="text-anchor:start;">T frames</text>
+  <line x1="550" y1="114" x2="550" y2="138" class="flow" marker-end="url(#ar)"/>
 
-  <!-- CLIP ENCODER -->
-  <rect x="310" y="118" width="180" height="40" rx="6" fill="#eeedfe" stroke="#534ab7" stroke-width="1"/>
-  <text x="400" y="136" class="lbl" style="fill:#3c3489">CLIP ViT-B/32</text>
-  <text x="400" y="152" class="sub" style="fill:#534ab7">pre-extracted</text>
+  <!-- CLIP ViT-B/32 -->
+  <rect x="450" y="138" width="200" height="46" rx="6" fill="#eeedfe" stroke="#534ab7" stroke-width="1"/>
+  <text x="550" y="158" class="lbl" style="fill:#3c3489">CLIP ViT-B/32</text>
+  <text x="550" y="174" class="sub" style="fill:#534ab7">pre-extracted features</text>
+  <text x="665" y="174" class="shape" style="text-anchor:start;">(T, 512)</text>
+  <line x1="550" y1="184" x2="550" y2="206" class="flow" marker-end="url(#ar)"/>
 
-  <text x="502" y="180" class="shape">T × 512</text>
-  <line x1="400" y1="158" x2="400" y2="188" class="flow" marker-end="url(#ar)"/>
+  <!-- Linear 512 → 256 -->
+  <rect x="450" y="206" width="200" height="40" rx="6" fill="#faeeda" stroke="#a8742a" stroke-width="1"/>
+  <text x="550" y="230" class="lbl">Linear 512 → 256</text>
+  <text x="665" y="237" class="shape" style="text-anchor:start;">(T, 256)</text>
+  <line x1="550" y1="246" x2="550" y2="268" class="flow" marker-end="url(#ar)"/>
 
-  <!-- PROJECTION -->
-  <rect x="310" y="188" width="180" height="36" rx="6" fill="#faeeda" stroke="#a8742a" stroke-width="1"/>
-  <text x="400" y="210" class="lbl">Linear  512 → 256</text>
+  <!-- xLSTM stack -->
+  <rect x="380" y="268" width="340" height="140" rx="10" fill="#eeedfe" stroke="#534ab7" stroke-width="1.4"/>
+  <text x="550" y="289" class="lbl" style="fill:#3c3489">xLSTM stack (8 mLSTM blocks)</text>
+  <rect x="400" y="304" width="30" height="64" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
+  <rect x="436" y="304" width="30" height="64" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
+  <rect x="472" y="304" width="30" height="64" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
+  <rect x="508" y="304" width="30" height="64" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
+  <rect x="544" y="304" width="30" height="64" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
+  <rect x="580" y="304" width="30" height="64" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
+  <rect x="616" y="304" width="30" height="64" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
+  <rect x="652" y="304" width="30" height="64" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
+  <text x="550" y="386" class="sub" style="fill:#534ab7;">8 × mLSTM  (block_pattern = "mmmmmmmm")</text>
+  <text x="550" y="402" class="hp">hidden=256 · heads=4 · conv_k=4 · proj=4/3 · dropout=0.15</text>
 
-  <text x="502" y="242" class="shape">T × 256</text>
-  <line x1="400" y1="224" x2="400" y2="252" class="flow" marker-end="url(#ar)"/>
+  <line x1="550" y1="408" x2="550" y2="436" class="flow" marker-end="url(#ar)"/>
+  <text x="665" y="424" class="shape" style="text-anchor:start;">seq_out (B, T, 256)</text>
 
-  <!-- SHARED ENCODER -->
-  <rect x="260" y="252" width="280" height="120" rx="10" fill="#eeedfe" stroke="#534ab7" stroke-width="1.4"/>
-  <text x="400" y="272" class="lbl" style="fill:#3c3489">xLSTM [ 7 : 1 ]</text>
+  <!-- Split point — sequence fans out to two attention pools -->
+  <circle cx="550" cy="436" r="4" fill="#534ab7"/>
 
-  <rect x="278" y="288" width="26" height="60" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
-  <rect x="308" y="288" width="26" height="60" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
-  <rect x="338" y="288" width="26" height="60" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
-  <rect x="368" y="288" width="26" height="60" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
-  <rect x="398" y="288" width="26" height="60" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
-  <rect x="428" y="288" width="26" height="60" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
-  <rect x="458" y="288" width="26" height="60" rx="3" fill="#dcd9fb" stroke="#534ab7" stroke-width="0.8"/>
-  <rect x="488" y="288" width="26" height="60" rx="3" fill="#fce6c4" stroke="#a8742a" stroke-width="0.8"/>
+  <!-- ===================================== TWO ATTENTION POOLS ===================================== -->
 
-  <text x="381" y="362" class="sub" style="fill:#534ab7">7 × mLSTM</text>
-  <text x="501" y="362" class="sub" style="fill:#a8742a">sLSTM</text>
+  <!-- Cls pool (left, green) -->
+  <path d="M 550 436 L 280 436 L 280 466" class="flow-a" marker-end="url(#ar-bold)"/>
+  <rect x="160" y="466" width="240" height="60" rx="8" fill="#eaf5ee" stroke="#1e7c3a" stroke-width="1.8"/>
+  <text x="280" y="487" class="lbl" style="fill:#0e5527;">Attention Pool — cls</text>
+  <text x="280" y="504" class="sub" style="fill:#1e7c3a;">learnable query θ_c · softmax over T</text>
+  <text x="280" y="518" class="sub" style="fill:#1e7c3a; font-style:italic;">picks cls-relevant frames</text>
 
-  <line x1="400" y1="372" x2="400" y2="398" class="flow" marker-end="url(#ar)"/>
+  <!-- Quality pool (right, gold) -->
+  <path d="M 550 436 L 820 436 L 820 466" class="flow-b" marker-end="url(#ar-bold)"/>
+  <rect x="700" y="466" width="240" height="60" rx="8" fill="#fdf3dd" stroke="#a87b00" stroke-width="1.8"/>
+  <text x="820" y="487" class="lbl" style="fill:#6a4d00;">Attention Pool — quality</text>
+  <text x="820" y="504" class="sub" style="fill:#a87b00;">learnable query θ_q · softmax over T</text>
+  <text x="820" y="518" class="sub" style="fill:#a87b00; font-style:italic;">picks execution-detail frames</text>
 
-  <!-- ATTENTION POOL -->
-  <rect x="310" y="398" width="180" height="36" rx="6" fill="#eeedfe" stroke="#534ab7" stroke-width="1"/>
-  <text x="400" y="421" class="lbl" style="fill:#3c3489">Attention Pool</text>
+  <text x="280" y="546" class="branch-lbl" style="fill:#0e5527; text-anchor:middle; font-weight:700;">pooled_cls (B, 256)</text>
+  <text x="820" y="546" class="branch-lbl" style="fill:#6a4d00; text-anchor:middle; font-weight:700;">pooled_q (B, 256)</text>
 
-  <text x="502" y="452" class="shape">256-d</text>
-  <line x1="400" y1="434" x2="400" y2="462" class="flow" marker-end="url(#ar)"/>
+  <line x1="280" y1="552" x2="280" y2="576" class="flow-a" marker-end="url(#ar-bold)"/>
+  <line x1="820" y1="552" x2="820" y2="576" class="flow-b" marker-end="url(#ar-bold)"/>
 
-  <!-- FUSION STAGE -->
-  <rect x="196" y="462" width="408" height="158" rx="12" fill="#fff8fb" stroke="#a8266a" stroke-width="1.6" stroke-dasharray="6 4"/>
-  <text x="400" y="480" class="lbl" style="fill:#71174a; font-size:12px;">Multi-Task Fusion</text>
+  <!-- ===================================== BRANCH A / BRANCH B ===================================== -->
 
-  <line x1="370" y1="462" x2="288" y2="494" class="fusion-stroke" marker-end="url(#ar)"/>
-  <line x1="430" y1="462" x2="512" y2="494" class="fusion-stroke" marker-end="url(#ar)"/>
+  <!-- Branch A box -->
+  <rect x="160" y="576" width="240" height="64" rx="8" fill="#e6f4ea" stroke="#1e7c3a" stroke-width="2"/>
+  <text x="280" y="598" class="lbl" style="fill:#0e5527;">Branch A</text>
+  <text x="280" y="616" class="sub" style="fill:#1e7c3a;">LN → Linear → GELU</text>
+  <text x="280" y="632" class="sub" style="fill:#1e7c3a; font-style:italic;">classification stream</text>
 
-  <rect x="210" y="494" width="140" height="40" rx="6" fill="#fde7ee" stroke="#a8266a" stroke-width="1"/>
-  <text x="280" y="512" class="lbl" style="fill:#71174a">Branch A</text>
-  <text x="280" y="527" class="sub" style="fill:#a8266a">PLN → Linear</text>
+  <!-- Branch B box -->
+  <rect x="700" y="576" width="240" height="64" rx="8" fill="#fef6e0" stroke="#a87b00" stroke-width="2"/>
+  <text x="820" y="598" class="lbl" style="fill:#6a4d00;">Branch B</text>
+  <text x="820" y="616" class="sub" style="fill:#a87b00;">LN → Linear → GELU</text>
+  <text x="820" y="632" class="sub" style="fill:#a87b00; font-style:italic;">quality stream</text>
 
-  <rect x="450" y="494" width="140" height="40" rx="6" fill="#fde7ee" stroke="#a8266a" stroke-width="1"/>
-  <text x="520" y="512" class="lbl" style="fill:#71174a">Branch B</text>
-  <text x="520" y="527" class="sub" style="fill:#a8266a">PLN → Linear</text>
+  <text x="280" y="660" class="sub" style="fill:#0e5527; font-weight:700;">a ∈ R^128</text>
+  <text x="820" y="660" class="sub" style="fill:#6a4d00; font-weight:700;">b ∈ R^128</text>
 
-  <line x1="280" y1="534" x2="375" y2="572" class="fusion-stroke" marker-end="url(#ar)"/>
-  <line x1="520" y1="534" x2="425" y2="572" class="fusion-stroke" marker-end="url(#ar)"/>
+  <line x1="280" y1="664" x2="280" y2="690" class="flow-a" marker-end="url(#ar-bold)"/>
+  <line x1="820" y1="664" x2="820" y2="690" class="flow-b" marker-end="url(#ar-bold)"/>
 
-  <circle cx="400" cy="588" r="22" fill="#fff" stroke="#a8266a" stroke-width="2"/>
-  <text x="400" y="598" text-anchor="middle" font-size="28" font-weight="700" fill="#a8266a">+</text>
+  <!-- ===================================== HEADS ===================================== -->
 
-  <text x="400" y="630" class="sub" style="fill:#71174a; font-weight:700;">fused 128-d vector</text>
+  <!-- Classification Head -->
+  <rect x="160" y="690" width="240" height="64" rx="8" fill="#e6f4ea" stroke="#1e7c3a" stroke-width="1.8"/>
+  <text x="280" y="712" class="lbl" style="fill:#0e5527;">Classification Head</text>
+  <text x="280" y="730" class="sub" style="fill:#1e7c3a;">MLP → C logits → softmax</text>
+  <text x="280" y="746" class="sub" style="fill:#1e7c3a; font-style:italic;">p_class ∈ Δ^(C−1)</text>
 
-  <!-- SHARED INPUT SPLIT -->
-  <line x1="400" y1="640" x2="400" y2="656" class="flow"/>
-  <circle cx="400" cy="658" r="4" fill="#1e7c3a"/>
-  <path d="M 400 658 L 240 658 L 240 684" class="share-mark" marker-end="url(#ar)"/>
-  <path d="M 400 658 L 560 658 L 560 684" class="share-mark" marker-end="url(#ar)"/>
-  <rect x="328" y="664" width="144" height="18" rx="9" fill="#e6f4ea" stroke="#1e7c3a" stroke-width="0.8"/>
-  <text x="400" y="677" class="sub" style="fill:#0e5527; font-weight:700;">shared input → 2 heads</text>
+  <text x="280" y="772" class="sub" style="fill:#0e5527; font-style:italic; font-weight:700;">ŷ = argmax(p_class)</text>
 
-  <!-- TASK HEADS -->
-  <rect x="158" y="684" width="162" height="48" rx="8" fill="#e6f4ea" stroke="#1e7c3a" stroke-width="1.4"/>
-  <text x="239" y="704" class="lbl" style="fill:#0e5527;">Classification</text>
-  <text x="239" y="720" class="sub" style="fill:#1e7c3a;">Linear → 4-class</text>
+  <!-- Soft class conditioning: p_class flows to the class embedding -->
+  <path d="M 400 716 L 470 716 L 470 692 L 540 692" class="flow-key" marker-end="url(#ar)"/>
+  <text x="470" y="685" class="sub" style="fill:#5f5e5a; font-style:italic;">p_class</text>
 
-  <rect x="479" y="684" width="162" height="48" rx="8" fill="#fef6e0" stroke="#a87b00" stroke-width="1.4"/>
-  <text x="560" y="704" class="lbl" style="fill:#6a4d00;">Quality</text>
-  <text x="560" y="720" class="sub" style="fill:#a87b00;">Linear → scalar</text>
+  <!-- Class embedding table -->
+  <rect x="540" y="678" width="170" height="40" rx="6" fill="#fff" stroke="#a87b00" stroke-width="1.4"/>
+  <text x="625" y="694" class="sub" style="fill:#6a4d00; font-weight:700;">class_emb ∈ R^(C×256)</text>
+  <text x="625" y="708" class="sub" style="fill:#a87b00; font-style:italic;">soft mix:  p_class @ W</text>
 
-  <!-- Comment head bypass arrow from Attention Pool -->
-  <path d="M 490 416 Q 760 430 760 684" class="flow-soft" marker-end="url(#ar)"/>
+  <!-- Class-embedding offset → ⊕ -->
+  <path d="M 710 698 L 760 698 L 760 716" class="flow-key" marker-end="url(#ar)"/>
 
-  <rect x="680" y="684" width="162" height="48" rx="8" fill="#e3f0ff" stroke="#1f5fa6" stroke-width="1.4"/>
-  <text x="761" y="704" class="lbl" style="fill:#0e3d70;">Comment</text>
-  <text x="761" y="720" class="sub" style="fill:#1f5fa6;">Flan-T5 + prefix</text>
+  <!-- branch_b → ⊕ -->
+  <path d="M 820 700 L 820 716" class="flow-b"/>
 
-  <!-- Cls → Guidance lookup -->
-  <line x1="239" y1="732" x2="239" y2="760" class="flow" marker-end="url(#ar)"/>
-  <rect x="158" y="760" width="162" height="40" rx="8" fill="#f4f1e8" stroke="#5f5e5a" stroke-width="1"/>
-  <text x="239" y="778" class="lbl">Guidance Lookup</text>
-  <text x="239" y="793" class="sub">dict[class] → text</text>
+  <!-- ⊕ add node -->
+  <circle cx="780" cy="728" r="18" fill="#fff" stroke="#a87b00" stroke-width="2.2"/>
+  <text x="780" y="734" text-anchor="middle" font-size="22" font-weight="700" fill="#a87b00">⊕</text>
+  <path d="M 798 728 L 820 728 L 820 740" class="flow-b" marker-end="url(#ar-bold)"/>
 
-  <!-- OUTPUT PILLS -->
-  <line x1="239" y1="800" x2="239" y2="838" class="flow" marker-end="url(#ar)"/>
-  <line x1="560" y1="732" x2="560" y2="838" class="flow" marker-end="url(#ar)"/>
-  <line x1="761" y1="732" x2="761" y2="838" class="flow" marker-end="url(#ar)"/>
+  <!-- Quality Head -->
+  <rect x="700" y="740" width="240" height="64" rx="8" fill="#fef6e0" stroke="#a87b00" stroke-width="1.8"/>
+  <text x="820" y="762" class="lbl" style="fill:#6a4d00;">Quality Head (regression)</text>
+  <text x="820" y="780" class="sub" style="fill:#a87b00;">MLP → Linear → sigmoid · scale + offset</text>
+  <text x="820" y="796" class="sub" style="fill:#a87b00; font-style:italic;">b_q = b + class_emb mix · loss = smooth-L1</text>
 
-  <rect x="138" y="838" width="202" height="44" rx="10" fill="#fff" stroke="#0e3d70" stroke-width="1.8"/>
-  <text x="239" y="865" class="out-lbl">guidance</text>
+  <text x="820" y="822" class="sub" style="fill:#6a4d00; font-style:italic; font-weight:700;">q̂ ∈ [1.0, 5.0] (continuous)</text>
 
-  <rect x="459" y="838" width="202" height="44" rx="10" fill="#fff" stroke="#0e3d70" stroke-width="1.8"/>
-  <text x="560" y="865" class="out-lbl">quality score</text>
+  <!-- ===================================== RETRIEVAL LAYER ===================================== -->
 
-  <rect x="660" y="838" width="202" height="44" rx="10" fill="#fff" stroke="#0e3d70" stroke-width="1.8"/>
-  <text x="761" y="865" class="out-lbl">comment</text>
+  <!-- cls → Guidance Lookup -->
+  <line x1="280" y1="780" x2="280" y2="880" class="flow" marker-end="url(#ar)"/>
+
+  <!-- cls (filter) + quality (penalty) → Comment Retrieval -->
+  <path d="M 400 772 L 440 772 L 440 880 L 470 880" class="flow-key" marker-end="url(#ar)"/>
+  <path d="M 700 770 L 670 770 L 670 880 L 650 880" class="flow-key" marker-end="url(#ar)"/>
+  <text x="442" y="862" class="sub" style="fill:#0e5527; font-style:italic; font-weight:700; text-anchor:start;">ŷ (class filter)</text>
+  <text x="678" y="862" class="sub" style="fill:#6a4d00; font-style:italic; font-weight:700; text-anchor:end;">q̂ (penalty)</text>
+
+  <!-- pooled_q tap → Comment Retrieval (embedding for cosine similarity) -->
+  <path d="M 870 546 L 975 546 L 975 914 L 680 914" class="flow-key" marker-end="url(#ar)"/>
+  <text x="978" y="730" class="sub" style="fill:#5f5e5a; font-style:italic; font-weight:700; text-anchor:start;">pooled_q</text>
+  <text x="978" y="744" class="sub" style="fill:#5f5e5a; font-style:italic; text-anchor:start;">(embedding)</text>
+
+  <!-- Guidance Lookup -->
+  <rect x="160" y="880" width="240" height="68" rx="8" fill="#f4f1e8" stroke="#5f5e5a" stroke-width="1.4"/>
+  <text x="280" y="902" class="lbl">Guidance Lookup</text>
+  <text x="280" y="920" class="sub">dict[class_idx] → text</text>
+  <text x="280" y="938" class="sub" style="font-style:italic;">zero-parameter retrieval</text>
+
+  <!-- Comment Retrieval (class-filtered kNN with quality penalty) -->
+  <rect x="440" y="880" width="240" height="68" rx="8" fill="#f4f1e8" stroke="#5f5e5a" stroke-width="1.6"/>
+  <text x="560" y="900" class="lbl">Comment Retrieval (kNN)</text>
+  <text x="560" y="918" class="sub">class-filtered NN over train embeddings</text>
+  <text x="560" y="935" class="sub" style="font-style:italic;">score = cos_sim(pooled_q, t.emb) − λ · |q̂ − t.q|</text>
+
+  <!-- ===================================== OUTPUTS ===================================== -->
+
+  <line x1="280" y1="948" x2="280" y2="990" class="flow" marker-end="url(#ar)"/>
+  <line x1="560" y1="948" x2="560" y2="990" class="flow" marker-end="url(#ar)"/>
+  <line x1="820" y1="830" x2="820" y2="990" class="flow" marker-end="url(#ar)"/>
+
+  <rect x="165" y="990" width="230" height="46" rx="10" fill="#fff" stroke="#0e3d70" stroke-width="1.8"/>
+  <text x="280" y="1018" class="out-lbl">guidance</text>
+
+  <rect x="445" y="990" width="230" height="46" rx="10" fill="#fff" stroke="#0e3d70" stroke-width="1.8"/>
+  <text x="560" y="1018" class="out-lbl">corrective comment</text>
+
+  <rect x="705" y="990" width="230" height="46" rx="10" fill="#fff" stroke="#0e3d70" stroke-width="1.8"/>
+  <text x="820" y="1018" class="out-lbl">quality score ∈ [1.0, 5.0]</text>
+
+  <!-- ===================================== LEGEND ===================================== -->
+
+  <g transform="translate(60, 1080)">
+    <line x1="0" y1="0" x2="28" y2="0" class="flow-a"/>
+    <text x="36" y="4" class="sub" style="text-anchor:start;">cls stream — pooled_cls → Branch A → Classification Head</text>
+  </g>
+  <g transform="translate(580, 1080)">
+    <line x1="0" y1="0" x2="28" y2="0" class="flow-b"/>
+    <text x="36" y="4" class="sub" style="text-anchor:start;">quality stream — pooled_q → Branch B → ⊕ class_emb → Quality Head (regression)</text>
+  </g>
+  <g transform="translate(60, 1110)">
+    <line x1="0" y1="0" x2="28" y2="0" class="flow-key"/>
+    <text x="36" y="4" class="sub" style="text-anchor:start;">soft conditioning  (p_class @ class_emb, differentiable end-to-end)  /  retrieval keys</text>
+  </g>
+  <g transform="translate(60, 1144)">
+    <text x="0" y="4" class="sub" style="text-anchor:start; font-style:italic;">
+      Two parallel attention pools share the 8-block backbone but learn different temporal weightings — one for "what exercise" and one for "how well executed".
+    </text>
+  </g>
+  <g transform="translate(60, 1174)">
+    <text x="0" y="4" class="sub" style="text-anchor:start; font-style:italic;">
+      Quality head is exercise-aware: the soft class distribution is mixed through a learned C×256 embedding table and added to branch B before the head. Quality gradients flow back into the classifier.
+    </text>
+  </g>
+  <g transform="translate(60, 1204)">
+    <text x="0" y="4" class="sub" style="text-anchor:start; font-style:italic;">
+      Heads are MLPs (Linear → GELU → Dropout → Linear). Guidance is a class → text dict; comment is class-filtered nearest-neighbour over training embeddings, ranked by cosine similarity penalised by |q̂ − t.q|. Zero parameters added.
+    </text>
+  </g>
 </svg>

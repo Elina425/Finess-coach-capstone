@@ -1,0 +1,20 @@
+{
+  "_comment": "Paths relative to repo root. Pair comparable feature pipelines (adjust if your dirs differ).",
+  "features": [
+    {
+      "label": "Hand-crafted",
+      "bilstm_history": "results/paper_yolo26_mixed_bilstm/bilstm_cnn/history.json",
+      "xlstm_history": "results/paper_xlstm_yolo26_mixed/xlstm_7_1/history.json"
+    },
+    {
+      "label": "ResNet-50",
+      "bilstm_history": "results/paper_bilstm_hidden64_resnet/bilstm_cnn/history.json",
+      "xlstm_history": "results/paper_xlstm_seq60_resnet/xlstm_7_1/history.json"
+    },
+    {
+      "label": "ViTPose-S",
+      "bilstm_history": "results/paper_classification_vit256/bilstm_cnn/history.json",
+      "xlstm_history": "results/paper_classification_vit256/xlstm_7_1/history.json"
+    }
+  ]
+}

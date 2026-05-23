@@ -15,7 +15,8 @@ from enum import Enum
 import warnings
 warnings.filterwarnings('ignore')
 
-import mediapipe as mp
+# MediaPipe is imported lazily inside MediaPipeDetector (importing it at module load
+# pulls mediapipe.tasks → optional TensorFlow deps and can break on broken TF installs).
 
 class PoseModel(Enum):
     MEDIAPIPE = "mediapipe"
@@ -24,6 +25,7 @@ class PoseModel(Enum):
     RTMPOSE_X = "rtmpose_x"
     VITPOSE = "vitpose"
     DETRPOSE = "detrpose"
+    MOVENET_LIGHTNING = "movenet_lightning"
 
 
 @dataclass
@@ -34,7 +36,9 @@ class PoseEstimationResult:
     keypoints: np.ndarray  # Shape: (17, 2) or (17, 3) with confidence
     confidence: np.ndarray  # Shape: (17,)
     inference_time: float  # milliseconds
-    
+    # Full-frame pixel box ``(x0, y0, x1, y1)`` aligned with ``keypoints`` (Ultralytics person crop).
+    person_box_xyxy: Optional[np.ndarray] = None
+
     def __post_init__(self):
         """Validate keypoints shape"""
         if self.keypoints.shape[0] != 17:
@@ -81,6 +85,31 @@ class COCO_KEYPOINTS:
         (5, 11), (6, 12), (11, 12),  # torso
         (11, 13), (13, 15), (12, 14), (14, 16)  # legs
     ]
+
+
+# Symmetric limb pairs (COCO-17): frame kept iff each pair has max(left, right) conf ≥ τ (PosePulse-style).
+BILATERAL_LIMB_PAIRS: Tuple[Tuple[int, int], ...] = (
+    (5, 6),
+    (7, 8),
+    (9, 10),
+    (11, 12),
+    (13, 14),
+)
+BILATERAL_LIMB_PAIRS_WITH_ANKLES: Tuple[Tuple[int, int], ...] = BILATERAL_LIMB_PAIRS + ((15, 16),)
+
+
+def frame_passes_bilateral_coco17(
+    conf: np.ndarray,
+    tau: float = 0.3,
+    *,
+    pairs: Tuple[Tuple[int, int], ...] = BILATERAL_LIMB_PAIRS,
+) -> bool:
+    """Return True if every limb pair has at least one side with confidence ≥ tau."""
+    c = np.asarray(conf, dtype=np.float64).reshape(17)
+    for i, j in pairs:
+        if max(float(c[i]), float(c[j])) < float(tau):
+            return False
+    return True
 
 
 _COCO_ADJACENCY_17: Optional[np.ndarray] = None
@@ -448,6 +477,152 @@ class YOLODetector:
         return keypoints, confidence
 
 
+class UltralyticsCOCOPoseDetector:
+    """
+    Ultralytics YOLO pose (COCO-17) — default **YOLO26n-pose** for PosePulse-style pipelines.
+
+    ``model_name`` can be any Ultralytics pose checkpoint (e.g. ``yolo26n-pose.pt``, ``yolov8m-pose.pt``).
+    Outputs normalized ``(x, y)`` in ``[0, 1]`` relative to the **input frame** (same contract as
+    ``YOLODetector`` / ``VideoProcessor`` full-res remap).
+    """
+
+    def __init__(self, model_name: str = "yolo26n-pose.pt", *, quiet: bool = True):
+        self.available = False
+        self.model = None
+        self.model_name = str(model_name)
+        self.quiet = bool(quiet)
+        try:
+            from ultralytics import YOLO
+
+            self.model = YOLO(self.model_name)
+            self.available = True
+        except ImportError:
+            print("⚠️  Ultralytics not installed. Run: pip install ultralytics")
+            self.available = False
+        except Exception as e:
+            print(f"⚠️  Ultralytics pose model unavailable ({self.model_name}): {str(e)[:160]}")
+            self.available = False
+
+    def detect(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        if not self.available:
+            return None, None
+        h, w = frame.shape[:2]
+        results = self.model.predict(frame, conf=0.25, verbose=not self.quiet)
+        if not results or not hasattr(results[0], "keypoints") or results[0].keypoints is None:
+            return None, None
+        if results[0].keypoints.xy.shape[0] == 0:
+            return None, None
+        keypoints = results[0].keypoints.xy[0].cpu().numpy()
+        confidence = (
+            results[0].keypoints.conf[0].cpu().numpy()
+            if hasattr(results[0].keypoints, "conf") and results[0].keypoints.conf is not None
+            else np.ones(17, dtype=np.float32)
+        )
+        if keypoints.shape[0] != 17:
+            return None, None
+        keypoints = keypoints.astype(np.float32)
+        keypoints[:, 0] /= float(w)
+        keypoints[:, 1] /= float(h)
+        confidence = np.asarray(confidence, dtype=np.float32).reshape(17)
+        return keypoints, confidence
+
+    def detect_with_person_box(
+        self, frame: np.ndarray
+    ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
+        """
+        Same normalized keypoints/confidences as ``detect``, plus a **person** box in **pixel**
+        coordinates of the same ``frame`` (``xyxy``). Uses Ultralytics ``boxes`` when present
+        (same-instance index or best IoU vs a tight keypoint box); otherwise falls back to a
+        tight axis-aligned box from visible COCO-17 joints.
+        """
+        if not self.available:
+            return None, None, None
+        h, w = frame.shape[:2]
+        results = self.model.predict(frame, conf=0.25, verbose=not self.quiet)
+        if not results or not hasattr(results[0], "keypoints") or results[0].keypoints is None:
+            return None, None, None
+        if results[0].keypoints.xy.shape[0] == 0:
+            return None, None, None
+        n_pose = int(results[0].keypoints.xy.shape[0])
+        inst_idx = 0
+        keypoints_px = results[0].keypoints.xy[inst_idx].cpu().numpy().astype(np.float32)
+        confidence = (
+            results[0].keypoints.conf[inst_idx].cpu().numpy()
+            if hasattr(results[0].keypoints, "conf") and results[0].keypoints.conf is not None
+            else np.ones(17, dtype=np.float32)
+        )
+        if keypoints_px.shape[0] != 17:
+            return None, None, None
+        confidence = np.asarray(confidence, dtype=np.float32).reshape(17)
+
+        xyxy_det: Optional[np.ndarray] = None
+        if hasattr(results[0], "boxes") and results[0].boxes is not None and len(results[0].boxes) > 0:
+            boxes_xyxy = results[0].boxes.xyxy.cpu().numpy().astype(np.float64)
+            n_box = int(boxes_xyxy.shape[0])
+            if n_box == n_pose:
+                xyxy_det = boxes_xyxy[inst_idx].astype(np.float32)
+            else:
+                kpb = _tight_xyxy_from_coco17_pixels(keypoints_px, w, h, margin=0.0)
+                best_j = 0
+                best_iou = -1.0
+                for j in range(n_box):
+                    iou = _axis_aligned_iou_xyxy(boxes_xyxy[j], kpb)
+                    if iou > best_iou:
+                        best_iou = iou
+                        best_j = j
+                xyxy_det = boxes_xyxy[best_j].astype(np.float32)
+        if xyxy_det is None:
+            xyxy_det = _tight_xyxy_from_coco17_pixels(keypoints_px, w, h, margin=0.0).astype(np.float32)
+
+        keypoints = keypoints_px.copy()
+        keypoints[:, 0] /= float(w)
+        keypoints[:, 1] /= float(h)
+        return keypoints, confidence, xyxy_det
+
+
+def _axis_aligned_iou_xyxy(a: np.ndarray, b: np.ndarray) -> float:
+    ax0, ay0, ax1, ay1 = (float(x) for x in a.reshape(4))
+    bx0, by0, bx1, by1 = (float(x) for x in b.reshape(4))
+    ix0, iy0 = max(ax0, bx0), max(ay0, by0)
+    ix1, iy1 = min(ax1, bx1), min(ay1, by1)
+    iw, ih = max(0.0, ix1 - ix0), max(0.0, iy1 - iy0)
+    inter = iw * ih
+    aa = max(0.0, ax1 - ax0) * max(0.0, ay1 - ay0)
+    bb = max(0.0, bx1 - bx0) * max(0.0, by1 - by0)
+    union = aa + bb - inter
+    return float(inter / union) if union > 1e-6 else 0.0
+
+
+def _tight_xyxy_from_coco17_pixels(
+    kp: np.ndarray,
+    width: int,
+    height: int,
+    *,
+    margin: float = 0.0,
+) -> np.ndarray:
+    """Axis-aligned box from visible joints; optional relative margin on width/height."""
+    kp = np.asarray(kp, dtype=np.float64).reshape(17, 2)
+    valid = np.any(kp != 0.0, axis=1)
+    if not valid.any():
+        return np.array([0.0, 0.0, float(max(1, width - 1)), float(max(1, height - 1))], dtype=np.float64)
+    xy = kp[valid]
+    x0, y0 = float(xy[:, 0].min()), float(xy[:, 1].min())
+    x1, y1 = float(xy[:, 0].max()), float(xy[:, 1].max())
+    bw, bh = max(1.0, x1 - x0), max(1.0, y1 - y0)
+    mx, my = margin * bw, margin * bh
+    x0, x1 = x0 - mx, x1 + mx
+    y0, y1 = y0 - my, y1 + my
+    x0i = max(0.0, x0)
+    y0i = max(0.0, y0)
+    x1i = min(float(width - 1), x1)
+    y1i = min(float(height - 1), y1)
+    if x1i <= x0i:
+        x1i = min(float(width - 1), x0i + 1.0)
+    if y1i <= y0i:
+        y1i = min(float(height - 1), y0i + 1.0)
+    return np.array([x0i, y0i, x1i, y1i], dtype=np.float64)
+
+
 class OpenPoseDetector:
     """OpenPose wrapper (requires separate OpenPose installation)"""
     
@@ -545,23 +720,32 @@ class ViTPoseDetector:
 
     display_name = "ViTPose (RTMPose)"
 
-    def __init__(self):
+    def __init__(
+        self,
+        *,
+        mode: str = "balanced",
+        device: str = "cpu",
+        quiet: bool = False,
+    ):
         self.available = False
         self.body = None
+        self.quiet = bool(quiet)
         try:
             from rtmlib import Body
 
             self.body = Body(
-                mode="balanced",
+                mode=str(mode),
                 to_openpose=False,
                 backend="onnxruntime",
-                device="cpu",
+                device=str(device),
             )
             self.available = True
-            print("✓ ViTPose ready (RTMPose via rtmlib, COCO-17)")
+            if not self.quiet:
+                print("✓ ViTPose ready (RTMPose via rtmlib, COCO-17)")
         except Exception as e:
-            print(f"⚠️  ViTPose/rtmlib unavailable: {e}")
-            print("    Install: pip install rtmlib onnxruntime")
+            if not self.quiet:
+                print(f"⚠️  ViTPose/rtmlib unavailable: {e}")
+                print("    Install: pip install rtmlib onnxruntime")
 
     def detect(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         if not self.available or self.body is None:
@@ -583,9 +767,10 @@ class RTMPoseXLDetector:
 
     display_name = "RTMPose-X (large)"
 
-    def __init__(self):
+    def __init__(self, *, device: str = "cpu", quiet: bool = False):
         self.available = False
         self.body = None
+        self.quiet = bool(quiet)
         try:
             from rtmlib import Body
 
@@ -593,13 +778,15 @@ class RTMPoseXLDetector:
                 mode="performance",
                 to_openpose=False,
                 backend="onnxruntime",
-                device="cpu",
+                device=str(device),
             )
             self.available = True
-            print("✓ RTMPose-X ready (rtmlib, mode=performance)")
+            if not self.quiet:
+                print("✓ RTMPose-X ready (rtmlib, mode=performance)")
         except Exception as e:
-            print(f"⚠️  RTMPose-X unavailable: {e}")
-            print("    Install: pip install rtmlib onnxruntime")
+            if not self.quiet:
+                print(f"⚠️  RTMPose-X unavailable: {e}")
+                print("    Install: pip install rtmlib onnxruntime")
 
     def detect(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         if not self.available or self.body is None:
@@ -652,11 +839,139 @@ class DETRPoseDetector:
         return _decode_rtmlib_coco17_output(kp, sc, w, h)
 
 
+_MOVENET_LIGHTNING_SINGLETON: Optional["MoveNetLightningDetector"] = None
+
+
+def _repo_root_for_assets() -> Path:
+    """fitness_coach/core/pose_estimation_core.py → project root."""
+    return Path(__file__).resolve().parents[2]
+
+
+class MoveNetLightningDetector:
+    """
+    TensorFlow Hub single-pose MoveNet Lightning (192×192, COCO-17).
+    Included in comparisons only after a lightweight smoke test on a reference frame;
+    if TensorFlow / Hub fails or no confident pose is returned, ``available`` stays False.
+    """
+
+    _HUB_URL = "https://tfhub.dev/google/movenet/singlepose/lightning/4"
+
+    def __init__(self, *, quiet: bool = False):
+        self.available = False
+        self._fn = None
+        self.quiet = bool(quiet)
+        try:
+            import os
+
+            os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+            import tensorflow as tf  # noqa: F401
+
+            if not hasattr(tf, "__version__"):
+                if not self.quiet:
+                    print("MoveNet Lightning: TensorFlow install incomplete; skipping.")
+                return
+            import tensorflow_hub as hub
+
+            module = hub.load(self._HUB_URL)
+            self._fn = module.signatures["serving_default"]
+        except Exception as e:
+            if not self.quiet:
+                msg = str(e)
+                if len(msg) > 140:
+                    msg = msg[:137] + "..."
+                print(f"MoveNet Lightning unavailable ({msg})")
+            return
+
+        if not self._smoke_detect_reference():
+            self._fn = None
+            if not self.quiet:
+                print(
+                    "MoveNet Lightning: smoke test found no confident pose on reference frames; "
+                    "skipping (other detectors unchanged)."
+                )
+            return
+
+        self.available = True
+        if not self.quiet:
+            print("✓ MoveNet Lightning ready (TF Hub, COCO-17)")
+
+    def _smoke_detect_reference(self) -> bool:
+        """True if at least one bundled reference image yields a plausible detection."""
+        candidates = [
+            _repo_root_for_assets()
+            / "results"
+            / "02_step_pose_comparison"
+            / "skeleton_detection_squat_000004.png",
+            _repo_root_for_assets()
+            / "results"
+            / "02_step_pose_comparison"
+            / "skeleton_detection_push-up_000004.png",
+            _repo_root_for_assets()
+            / "results"
+            / "skeleton_comparison_riccio"
+            / "skeleton_detection_squat_squat_3.png",
+        ]
+        for p in candidates:
+            if not p.is_file():
+                continue
+            frame = cv2.imread(str(p))
+            if frame is None or frame.size == 0:
+                continue
+            try:
+                kp, conf = self._infer(frame)
+            except Exception:
+                continue
+            if kp is None or conf is None:
+                continue
+            if float(np.mean(conf)) >= 0.08 and np.isfinite(kp).all():
+                return True
+        return False
+
+    def _infer(self, frame_bgr: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        import tensorflow as tf
+
+        if self._fn is None:
+            return None, None
+        rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+        small = cv2.resize(rgb, (192, 192), interpolation=cv2.INTER_LINEAR)
+        inp = np.expand_dims(small, axis=0).astype(np.int32)
+        out = self._fn(tf.constant(inp))
+        raw = out["output_0"].numpy()
+        k = np.asarray(raw[0, 0], dtype=np.float32)
+        if k.shape != (17, 3):
+            return None, None
+        y, x, c = k[:, 0], k[:, 1], k[:, 2]
+        # Hub builds may return either normalized [0,1] or pixel coords on the 192 input.
+        if float(np.nanmax(np.maximum(y, x))) > 1.5:
+            y = y / 192.0
+            x = x / 192.0
+        keypoints = np.stack([x, y], axis=1).astype(np.float32)
+        keypoints = np.clip(keypoints, 0.0, 1.0)
+        confidence = np.clip(c, 0.0, 1.0).astype(np.float32)
+        return keypoints, confidence
+
+    def detect(self, frame: np.ndarray) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+        if not self.available or self._fn is None:
+            return None, None
+        try:
+            return self._infer(frame)
+        except Exception as e:
+            if not self.quiet:
+                print(f"MoveNet Lightning inference error: {e}")
+            return None, None
+
+
 def iter_default_comparison_detectors():
     """
     Yields (registry_key, display_name, detector) for all built-in pose models.
     Skips detectors that failed to initialize.
     """
+    global _MOVENET_LIGHTNING_SINGLETON
+    if _MOVENET_LIGHTNING_SINGLETON is None:
+        _MOVENET_LIGHTNING_SINGLETON = MoveNetLightningDetector()
+    if _MOVENET_LIGHTNING_SINGLETON.available:
+        yield ("movenet_lightning", "MoveNet Lightning", _MOVENET_LIGHTNING_SINGLETON)
+
     candidates = [
         ("mediapipe", "MediaPipe", MediaPipeDetector),
         ("yolo", "YOLOv8-Pose", YOLODetector),
@@ -702,41 +1017,42 @@ class PosePreprocessor:
         return normalized
     
     @staticmethod
+    def torso_normalization_terms(keypoints: np.ndarray) -> Optional[Tuple[np.ndarray, float]]:
+        """Mid-hips ``h`` and shoulder–hip torso length ``L_T`` for Eq.~(5)-style normalization."""
+        if keypoints is None or np.all(keypoints == 0):
+            return None
+        kp = np.asarray(keypoints)
+        left_shoulder_idx = 5
+        right_shoulder_idx = 6
+        left_hip_idx = 11
+        right_hip_idx = 12
+        shoulders = [kp[left_shoulder_idx], kp[right_shoulder_idx]]
+        hips = [kp[left_hip_idx], kp[right_hip_idx]]
+        if np.any(shoulders[0] == 0) or np.any(shoulders[1] == 0) or np.any(hips[0] == 0) or np.any(
+            hips[1] == 0
+        ):
+            return None
+        shoulder_center = np.mean(shoulders, axis=0)
+        hip_center = np.mean(hips, axis=0)
+        torso_vec = hip_center - shoulder_center
+        torso_length = float(np.linalg.norm(torso_vec))
+        if torso_length <= 1e-12:
+            return None
+        return hip_center.astype(np.float64), torso_length
+
+    @staticmethod
     def skeleton_based_normalize(keypoints: np.ndarray) -> np.ndarray:
         """
         Normalize based on torso length (shoulder-to-hip distance)
         More robust to camera distance variations
         """
-        if keypoints is None or np.all(keypoints == 0):
+        terms = PosePreprocessor.torso_normalization_terms(keypoints)
+        if terms is None:
             return keypoints
-        
-        # Shoulder and hip indices in COCO format
-        left_shoulder_idx = 5
-        right_shoulder_idx = 6
-        left_hip_idx = 11
-        right_hip_idx = 12
-        
-        shoulders = [keypoints[left_shoulder_idx], keypoints[right_shoulder_idx]]
-        hips = [keypoints[left_hip_idx], keypoints[right_hip_idx]]
-        
-        # Check if reference joints are valid
-        if np.any(shoulders[0] == 0) or np.any(shoulders[1] == 0) or \
-           np.any(hips[0] == 0) or np.any(hips[1] == 0):
-            return keypoints
-        
-        # Compute torso center and length
-        shoulder_center = np.mean(shoulders, axis=0)
-        hip_center = np.mean(hips, axis=0)
-        torso_vec = hip_center - shoulder_center
-        torso_length = np.linalg.norm(torso_vec)
-        
-        if torso_length == 0:
-            return keypoints
-        
-        # Normalize: center around hip and scale by torso length
-        normalized = (keypoints - hip_center) / torso_length
-        
-        return normalized
+        hip_center, torso_length = terms
+        kp_a = np.asarray(keypoints, dtype=np.float64)
+        out = (kp_a - hip_center) / torso_length
+        return out.astype(np.asarray(keypoints).dtype, copy=False)
 
     # COCO-17 limb chains: each bone length := ratio * torso_length (mid_shoulder–mid_hip).
     # Ratios are simplified anthropometric priors; inspired by OpenSim / BioPose (arXiv:2501.07800)
@@ -1143,6 +1459,14 @@ class PosePreprocessor:
         return [out[t].astype(np.float32) for t in range(T)]
 
 
+# PosePulse preprocessing diagram Row 1 steps 2–4 (frame-aligned; no FPS sync — use before ViTPose/ResNet crops).
+POSEPULSE_DIAGRAM_TECHNIQUES_FRAME_ALIGNED: Tuple[str, ...] = (
+    "spatial_imputation",
+    "normalization",
+    "temporal_impute",
+)
+
+
 def apply_keypoint_preprocessing_pipeline(
     keypoint_sequence: List[np.ndarray],
     confidence_sequence: List[np.ndarray],
@@ -1157,32 +1481,28 @@ def apply_keypoint_preprocessing_pipeline(
     kalman_measurement_noise: float = 1e-2,
 ) -> Dict[str, Any]:
     """
-    Canonical order for capstone / thesis step 3 — **before** angle or mixed features.
-    Conceptually aligned with robust 2D skeletal handling (joint reliability, missing joints,
-    temporal consistency) discussed in multi-view motion-capture literature such as Jiang et al.
-    (MM'22, D-MAE, DOI 10.1145/3503161.3547796); here we apply analogous **monocular** steps:
+    **PosePulse-style Row 1 (keypoint cleaning)** matches the thesis diagram order:
 
-    1. **Spatial imputation** (if ``imputation`` in techniques): low-confidence joints filled
-       in-frame — default: COCO edge neighbors; if ``laplacian_spatial`` is also listed,
-       **graph Laplacian** harmonic relaxation on the skeleton (``L = D - A``, arXiv:2204.10312).
-    2. **Skeleton-based normalization** (if ``normalization``): hip-centered, torso-length
-       scale — removes most camera-distance / subject-size effects in 2D.
-    3. **Bone proportion scaling** (if ``bone_proportion``): BioPose-inspired (arXiv:2501.07800)
-       limb lengths set to anthropometric ratios × torso length while preserving 2D bone
-       directions (after normalization when both are enabled).
-    4. **Temporal imputation** (if ``imputation``): linear interpolation along time for
-       flickering joints (uses confidence masks).
-    5. **FPS resampling** (if ``fps_sync``): linear interpolation in time to ``target_fps``
-       so datasets with different native rates share a common timeline (e.g. 30 Hz).
-    6. **Temporal smoothing** (optional): ``savgol`` — Savitzky–Golay filter along time (local
-       polynomial fit; preserves motion peaks better than box smoothing); or ``kalman`` —
-       constant-velocity Kalman per joint coordinate. Use at most one of ``savgol`` / ``kalman``.
-       Applied after rate sync, before ``dwt``.
+    - **Step 2 — Spatial imputation** if ``spatial_imputation`` **or** ``imputation`` is listed
+      (confidence threshold τ=0.3): skeleton-aware neighbor fill by default; add
+      ``laplacian_spatial`` for graph-Laplacian relaxation (arXiv:2204.10312).
+    - **Step 3 — Skeleton normalization** if ``normalization``: hip-centered coordinates,
+      torso-length scaling ``L_T``.
+    - **Step 4 — Temporal imputation** if ``temporal_impute``, ``temporal_imputation``, **or**
+      ``imputation``: per-joint linear interpolation in time (same τ on confidence masks).
 
-    Optional ``dwt`` appends wavelet-based normalization (requires PyWavelets).
+    Use ``POSEPULSE_DIAGRAM_TECHNIQUES_FRAME_ALIGNED`` for steps 2–4 explicitly without bundling.
 
-    This is the same logic as ``DatasetPreprocessor._postprocess_extracted_sequence`` but
-    callable on any aligned keypoint + confidence lists (e.g. unit tests or NPZ reprocessing).
+    **After Row 1**, optional extensions run in order: ``bone_proportion`` (BioPose-style limbs),
+    ``fps_sync``, ``savgol`` / ``kalman``, ``dwt``.
+
+    Bilateral filtering and YOLO pose extraction happen **before** this function (diagram step 1).
+
+    Row 2 — ViTPose/ResNet crops use ``keypoints_pixels_for_crop``; windowing + train Z-score live
+    in the dataset / training scripts (e.g. 30-frame windows, stride 15).
+
+    Legacy default when ``preprocessing_techniques`` is ``None`` remains normalization +
+    bundled ``imputation`` + ``fps_sync`` for older angle pipelines.
     """
     if preprocessing_techniques is None:
         preprocessing_techniques = ["normalization", "imputation", "fps_sync"]
@@ -1207,7 +1527,14 @@ def apply_keypoint_preprocessing_pipeline(
     }
     conf_seq = confidence_sequence
 
-    if "imputation" in techniques:
+    run_spatial_imputation = ("imputation" in techniques) or ("spatial_imputation" in techniques)
+    run_temporal_imputation = (
+        ("imputation" in techniques)
+        or ("temporal_impute" in techniques)
+        or ("temporal_imputation" in techniques)
+    )
+
+    if run_spatial_imputation:
         imputed_seq = []
         imputation_stats = []
         use_laplacian_spatial = "laplacian_spatial" in techniques
@@ -1230,7 +1557,25 @@ def apply_keypoint_preprocessing_pipeline(
         )
         processed["imputation_rate"] = float(np.mean(imputation_stats)) / 17.0 * 100.0
 
+    processed["kp_pixels_pre_normalization"] = [
+        np.asarray(kp, dtype=np.float32).copy() for kp in processed["final_keypoints"]
+    ]
+
     if "normalization" in techniques:
+        processed["torso_denorm_meta"] = []
+        for kp_pre in processed["kp_pixels_pre_normalization"]:
+            t = PosePreprocessor.torso_normalization_terms(np.asarray(kp_pre))
+            if t is None:
+                processed["torso_denorm_meta"].append({"normalized_ok": False})
+            else:
+                hip_c, lt = t
+                processed["torso_denorm_meta"].append(
+                    {
+                        "normalized_ok": True,
+                        "hip_center": np.asarray(hip_c, dtype=np.float32),
+                        "torso_length": float(lt),
+                    }
+                )
         normalized = [
             PosePreprocessor.skeleton_based_normalize(kp.copy())
             for kp in processed["final_keypoints"]
@@ -1238,20 +1583,20 @@ def apply_keypoint_preprocessing_pipeline(
         processed["techniques_applied"]["normalization"] = "skeleton-based-torso"
         processed["final_keypoints"] = normalized
 
-    if "bone_proportion" in techniques:
-        processed["final_keypoints"] = [
-            PosePreprocessor.bone_proportion_normalize(kp.copy())
-            for kp in processed["final_keypoints"]
-        ]
-        processed["techniques_applied"]["bone_proportion"] = "biopose-limb-ratios-arxiv2501.07800"
-
-    if "temporal_impute" in techniques or "imputation" in techniques:
+    if run_temporal_imputation:
         processed["final_keypoints"] = PosePreprocessor.temporal_impute_sequence(
             processed["final_keypoints"],
             conf_seq,
             conf_threshold=0.3,
         )
         processed["techniques_applied"]["imputation_temporal"] = "linear-per-joint"
+
+    if "bone_proportion" in techniques:
+        processed["final_keypoints"] = [
+            PosePreprocessor.bone_proportion_normalize(kp.copy())
+            for kp in processed["final_keypoints"]
+        ]
+        processed["techniques_applied"]["bone_proportion"] = "biopose-limb-ratios-arxiv2501.07800"
 
     src_fps = float(processed["source_fps"])
     if src_fps <= 1e-6:
@@ -1325,6 +1670,40 @@ def apply_keypoint_preprocessing_pipeline(
     return processed
 
 
+def keypoints_pixels_for_crop(processed: Dict[str, Any], frame_idx: int) -> np.ndarray:
+    """Invert torso normalization (when applied) so ``final_keypoints`` can drive RGB crops in pixels."""
+    fk = np.asarray(processed["final_keypoints"][frame_idx], dtype=np.float32)
+    applied = processed.get("techniques_applied") or {}
+
+    dwt_tag = applied.get("dwt")
+    if dwt_tag is not None and not str(dwt_tag).startswith("failed"):
+        pre = processed.get("kp_pixels_pre_normalization")
+        if pre is not None and frame_idx < len(pre):
+            return np.asarray(pre[frame_idx], dtype=np.float32).copy()
+
+    if applied.get("bone_proportion") is not None:
+        pre = processed.get("kp_pixels_pre_normalization")
+        if pre is not None and frame_idx < len(pre):
+            return np.asarray(pre[frame_idx], dtype=np.float32).copy()
+
+    if applied.get("normalization") is None:
+        return fk.copy()
+
+    meta_list = processed.get("torso_denorm_meta")
+    if not meta_list or frame_idx >= len(meta_list):
+        pre = processed.get("kp_pixels_pre_normalization")
+        if pre is not None and frame_idx < len(pre):
+            return np.asarray(pre[frame_idx], dtype=np.float32).copy()
+        return fk.copy()
+
+    meta = meta_list[frame_idx]
+    if meta.get("normalized_ok"):
+        lt = float(meta["torso_length"])
+        hip = np.asarray(meta["hip_center"], dtype=np.float64)
+        return (fk.astype(np.float64) * lt + hip).astype(np.float32)
+    return fk.copy()
+
+
 class VideoProcessor:
     """Process video files and extract poses"""
 
@@ -1380,9 +1759,22 @@ class VideoProcessor:
                 continue
 
             det_frame = self._downscale_for_detection(frame, int(detection_max_long_edge))
+            sw, sh = float(det_frame.shape[1]), float(det_frame.shape[0])
+            sx = float(self.width) / sw
+            sy = float(self.height) / sh
 
             start_time = time.time()
-            keypoints, confidence = detector.detect(det_frame)
+            person_box_full: Optional[np.ndarray] = None
+            if hasattr(detector, "detect_with_person_box"):
+                keypoints, confidence, box_det = detector.detect_with_person_box(det_frame)
+                if box_det is not None:
+                    b = np.asarray(box_det, dtype=np.float64).reshape(4)
+                    person_box_full = b.copy()
+                    person_box_full[[0, 2]] *= sx
+                    person_box_full[[1, 3]] *= sy
+                    person_box_full = person_box_full.astype(np.float32)
+            else:
+                keypoints, confidence = detector.detect(det_frame)
             inference_time = (time.time() - start_time) * 1000  # ms
 
             if keypoints is not None:
@@ -1397,6 +1789,7 @@ class VideoProcessor:
                     keypoints=keypoints,
                     confidence=confidence,
                     inference_time=inference_time,
+                    person_box_xyxy=person_box_full,
                 )
                 results.append(result)
 
@@ -1404,7 +1797,93 @@ class VideoProcessor:
 
         self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)  # Reset
         return results
-    
+
+    def process_yolo_then_vitpose(
+        self,
+        yolo_det: UltralyticsCOCOPoseDetector,
+        vit_det: ViTPoseDetector,
+        max_frames: Optional[int] = None,
+        *,
+        detection_stride: int = 1,
+        detection_max_long_edge: int = 0,
+        bilateral_filter: bool = False,
+        bilateral_conf_tau: float = 0.3,
+        bilateral_include_ankles: bool = False,
+    ) -> List[PoseEstimationResult]:
+        """
+        Two-stage pose for PosePulse-style pipelines: **YOLO26-Pose** on each frame for detection
+        and optional **bilateral** gating (uses YOLO confidences), then **ViTPose** (rtmlib RTMPose)
+        on the same (possibly downscaled) frame. Returned keypoints/confidences are **ViTPose** in
+        full-frame pixel space — downstream ``apply_keypoint_preprocessing_pipeline`` and
+        angle / mixed-42 features run unchanged on that sequence.
+
+        Frames where YOLO returns no pose, bilateral fails (when enabled), or ViTPose fails are
+        omitted (same contract as skipping weak detections).
+        """
+        results: List[PoseEstimationResult] = []
+        frame_idx = 0
+        stride = max(1, int(detection_stride))
+        pairs = (
+            BILATERAL_LIMB_PAIRS_WITH_ANKLES
+            if bilateral_include_ankles
+            else BILATERAL_LIMB_PAIRS
+        )
+
+        while True:
+            ret, frame = self.cap.read()
+            if not ret:
+                break
+
+            if max_frames and frame_idx >= max_frames:
+                break
+
+            if frame_idx % stride != 0:
+                frame_idx += 1
+                continue
+
+            det_frame = self._downscale_for_detection(frame, int(detection_max_long_edge))
+
+            t0 = time.time()
+            k_y, c_y = yolo_det.detect(det_frame)
+            t_yolo_ms = (time.time() - t0) * 1000.0
+
+            if k_y is None or c_y is None:
+                frame_idx += 1
+                continue
+
+            if bilateral_filter and not frame_passes_bilateral_coco17(
+                c_y, float(bilateral_conf_tau), pairs=pairs
+            ):
+                frame_idx += 1
+                continue
+
+            t1 = time.time()
+            k_v, c_v = vit_det.detect(det_frame)
+            t_vit_ms = (time.time() - t1) * 1000.0
+
+            if k_v is None or c_v is None:
+                frame_idx += 1
+                continue
+
+            k_v = k_v.astype(np.float32).copy()
+            k_v[:, 0] *= float(self.width)
+            k_v[:, 1] *= float(self.height)
+            c_v = np.asarray(c_v, dtype=np.float32).reshape(17)
+
+            results.append(
+                PoseEstimationResult(
+                    model_name="YOLO26_then_ViTPose",
+                    frame_idx=frame_idx,
+                    keypoints=k_v,
+                    confidence=c_v,
+                    inference_time=float(t_yolo_ms + t_vit_ms),
+                )
+            )
+            frame_idx += 1
+
+        self.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        return results
+
     def close(self):
         self.cap.release()
 

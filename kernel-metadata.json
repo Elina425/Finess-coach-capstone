@@ -1,0 +1,16 @@
+{
+  "id": "emelkonyan/fitness-coach-paper-classification",
+  "title": "Fitness Coach Paper Classification with ViTPose",
+  "code_file": "notebooks/kaggle_paper_classification.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "emelkonyan/riccio-realtime-exercise-recognition"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

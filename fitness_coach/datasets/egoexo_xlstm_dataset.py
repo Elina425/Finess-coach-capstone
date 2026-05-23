@@ -4,7 +4,7 @@ Dataset utilities for EgoExo xLSTM multi-task training.
 Each sample consists of:
 - temporal features (CLIP visual, pose NPZ, or annotation-derived)
 - exercise class label
-- quality score normalized to [0, 1]
+- quality targets: ``unit`` (mapped to ``[0, 1]``) or ``likert`` native ``[1, 5]`` (EgoExo paper form)
 - multi-hot error-tag targets derived from interpretable judgement annotations
 
 Feature modes:
@@ -55,12 +55,23 @@ def load_clip_segment(
     view: str = DEFAULT_CLIP_VIEW,
     max_frames: int = 300,
     subsample_stride: int = 0,
+    allow_fallback: bool = False,
 ) -> Optional[np.ndarray]:
-    """Load a CLIP feature segment for one action clip, with optional subsampling."""
+    """Load a CLIP feature segment for one action clip, with optional subsampling.
+
+    By default, ``allow_fallback=False`` — when the requested view's feature
+    file is missing, ``None`` is returned. This is the correct behaviour when
+    multiple views are being enumerated explicitly (e.g. all six standard
+    views): missing-view clips should simply be skipped, not silently
+    substituted with a different view's features. Set ``allow_fallback=True``
+    only for legacy single-view loads where a stand-in is acceptable.
+    """
     cache_key = f"{record_id}/{view}"
     if cache_key not in _clip_cache:
         pth_path = clip_features_root / CLIP_SUBDIR / record_id / view / "clip_vit_b32_vid_frame_feat.pth"
         if not pth_path.is_file():
+            if not allow_fallback:
+                return None
             for fallback in ("exo_m", "ego_m", "exo_l"):
                 alt = clip_features_root / CLIP_SUBDIR / record_id / fallback / "clip_vit_b32_vid_frame_feat.pth"
                 if alt.is_file():
@@ -172,14 +183,58 @@ ERROR_KEYWORDS: Dict[str, Tuple[str, ...]] = {
 }
 
 
+LIKERT_Q_MIN = 1.0
+LIKERT_Q_MAX = 5.0
+
+
 def normalize_quality_score(value: float) -> float:
-    """Keep [0,1] as-is; map [1,5] to [0,1]; clamp otherwise."""
+    """Legacy: squeeze everything to ``[0, 1]`` (``--quality-encoding unit``)."""
     value = float(value)
     if 0.0 <= value <= 1.0:
         return value
-    if 1.0 <= value <= 5.0:
-        return max(0.0, min(1.0, (value - 1.0) / 4.0))
+    if LIKERT_Q_MIN <= value <= LIKERT_Q_MAX:
+        return max(0.0, min(1.0, (value - LIKERT_Q_MIN) / (LIKERT_Q_MAX - LIKERT_Q_MIN)))
     return max(0.0, min(1.0, value))
+
+
+def canonical_quality_score(raw: float, encoding: str) -> float:
+    """Return quality on the supervised axis chosen by ``encoding``.
+
+    ``unit`` — canonical ``[0, 1]`` (``[1,5]`` Likert folded with ``normalize_quality_score``).
+    ``likert`` — canonical ``[1, 5]``; values already on ``[0, 1]`` are expanded with ``1 + 4*v``
+    (inverse of folding) so older indices stay usable.
+    """
+    enc = (encoding or "unit").strip().lower()
+    v = float(raw)
+    if enc == "likert":
+        if LIKERT_Q_MIN <= v <= LIKERT_Q_MAX:
+            return max(LIKERT_Q_MIN, min(LIKERT_Q_MAX, v))
+        if 0.0 <= v <= 1.0:
+            return max(LIKERT_Q_MIN, min(LIKERT_Q_MAX, LIKERT_Q_MIN + (LIKERT_Q_MAX - LIKERT_Q_MIN) * v))
+        return max(LIKERT_Q_MIN, min(LIKERT_Q_MAX, v))
+    # unit path
+    return normalize_quality_score(v)
+
+
+def quality_score_to_bucket(q: float, bucket_edges: Tuple[float, ...]) -> int:
+    """Assign ``q`` to ``0 … len(bucket_edges)`` by upper-exclusive bin edges."""
+    q = float(q)
+    for i, edge in enumerate(bucket_edges):
+        if q < edge:
+            return i
+    return len(bucket_edges)
+
+
+def quality_bucket_centres(
+    bucket_edges: Tuple[float, ...],
+    *,
+    domain_lo: float = 0.0,
+    domain_hi: float = 1.0,
+) -> Tuple[float, ...]:
+    """Interval midpoints between ``domain_lo``, ``edges``, and ``domain_hi``."""
+    dl, dh = float(domain_lo), float(domain_hi)
+    cuts = [dl] + list(bucket_edges) + [dh]
+    return tuple(0.5 * (cuts[i] + cuts[i + 1]) for i in range(len(cuts) - 1))
 
 
 def _collect_error_text(row: Dict[str, str]) -> str:
@@ -206,17 +261,20 @@ def _collect_error_text(row: Dict[str, str]) -> str:
     return " ".join(texts).lower()
 
 
-def derive_error_targets(row: Dict[str, str]) -> np.ndarray:
+def derive_error_targets(row: Dict[str, str], *, encoding: str = "unit") -> np.ndarray:
     text = _collect_error_text(row)
     target = np.zeros(len(ERROR_TAGS), dtype=np.float32)
+    enc = (encoding or "unit").strip().lower()
+    q_lo, q_hi = ((0.0, 1.0) if enc != "likert" else (LIKERT_Q_MIN, LIKERT_Q_MAX))
+    default_raw = "3.0" if enc == "likert" else "0.5"
     if text:
         for idx, tag in enumerate(ERROR_TAGS):
             patterns = ERROR_KEYWORDS.get(tag, ())
             if any(pattern in text for pattern in patterns):
                 target[idx] = 1.0
     if target.sum() == 0:
-        quality = normalize_quality_score(float(row.get("quality", 0.5)))
-        if quality < 0.45:
+        quality = canonical_quality_score(float(row.get("quality", default_raw)), encoding)
+        if quality < q_lo + 0.45 * (q_hi - q_lo):
             target[ERROR_TAGS.index("alignment")] = 1.0
     return target
 
@@ -278,9 +336,18 @@ def apply_feature_standardizer(
     mean: np.ndarray,
     std: np.ndarray,
 ) -> None:
-    for idx, (x, y, q, e) in enumerate(samples):
+    for idx, sample in enumerate(samples):
+        x = sample[0]
         xn = (x.astype(np.float32) - mean) / std
-        samples[idx] = (xn.astype(np.float32), y, q, e)
+        x_new = xn.astype(np.float32)
+        if len(sample) == 4:
+            _, y, q, e = sample
+            samples[idx] = (x_new, int(y), float(q), e)
+        elif len(sample) == 5:
+            _, y, q, qb, e = sample
+            samples[idx] = (x_new, int(y), float(q), int(qb), e)
+        else:
+            raise ValueError(f"unsupported sample length {len(sample)}")
 
 
 class EgoExoXLSTMDataset(Dataset):
@@ -299,6 +366,7 @@ class EgoExoXLSTMDataset(Dataset):
         split: str,
         *,
         feature_mode: str = "clip",
+        quality_encoding: str = "likert",
         angles_dir: Optional[Path] = None,
         keypoints_dir: Optional[Path] = None,
         clip_features_root: Optional[Path] = None,
@@ -308,7 +376,18 @@ class EgoExoXLSTMDataset(Dataset):
         window: int = 0,
         stride: int = 0,
         max_seq_len: int = 96,
+        filter_null_comments: bool = False,
     ):
+        # When True, clips whose `comment` field is null/empty after stripping
+        # whitespace are dropped at construction time. Used in the retrieval-based
+        # feedback design (no LM head) where null comments contribute nothing to
+        # the comment-lookup table and only inflate per-batch memory.
+        self.filter_null_comments = bool(filter_null_comments)
+        qe = str(quality_encoding or "likert").strip().lower()
+        self.quality_encoding: str = qe if qe in ("unit", "likert") else "unit"
+        self.q_domain_lo, self.q_domain_hi = (
+            (0.0, 1.0) if self.quality_encoding == "unit" else (LIKERT_Q_MIN, LIKERT_Q_MAX)
+        )
         self.samples: List[Tuple[np.ndarray, int, float, np.ndarray]] = []
         # Parallel metadata used by the comment-generation head; aligned 1:1 with samples.
         # Each entry: {"comment": str, "class_name": str, "guidance": str}.
@@ -331,48 +410,93 @@ class EgoExoXLSTMDataset(Dataset):
                 if not stem:
                     continue
 
-                if self.feature_mode == "clip":
-                    sequence = self._load_clip_sequence(
-                        row,
-                        clip_features_root=clip_features_root,
-                        clip_view=clip_view,
-                        max_frames=clip_max_frames,
-                        subsample_stride=clip_subsample_stride,
-                    )
-                elif self.feature_mode == "annotation":
-                    sequence = encode_annotation_row(row, ANNOTATION_FEATURE_DIM)
-                    if sequence.shape[0] > self.max_seq_len:
-                        sequence = sequence[-self.max_seq_len:]
-                else:
-                    sequence = self._load_pose_sequence(
-                        stem,
-                        feature_mode=self.feature_mode,
-                        angles_dir=angles_dir,
-                        keypoints_dir=keypoints_dir,
-                    )
-                if sequence is None or sequence.shape[0] == 0:
-                    continue
+                # Resolve which camera views to load. `clip_view` may be:
+                #   - a single string (e.g. "ego_l")  → one sample per row
+                #   - a comma-separated string ("ego_l,ego_m,exo_m")
+                #   - the literal "all" → all six standard views
+                # When multiple views resolve, EACH view produces a separate
+                # training sample with identical labels/metadata. This is
+                # multi-view data augmentation, not view ensembling.
+                views_to_load = self._resolve_views(clip_view)
 
                 y_cls = class_to_idx[cls_name]
-                quality = normalize_quality_score(float(row["quality"]))
-                error_targets = derive_error_targets(row)
+                quality = canonical_quality_score(float(row["quality"]), self.quality_encoding)
+                error_targets = derive_error_targets(row, encoding=self.quality_encoding)
 
                 comment_text = (row.get("comment") or "").strip()
                 guidance_text = (row.get("action_guidance") or "").strip()
-                meta = {
+                # Optionally drop clips whose annotator comment is null/empty.
+                # Useful for the retrieval-based feedback design where empty
+                # comments contribute nothing to the comment-lookup table.
+                if self.filter_null_comments and (not comment_text or comment_text.lower() in ("null", "none", "nan")):
+                    continue
+                base_meta = {
                     "comment": comment_text,
                     "class_name": cls_name,
                     "guidance": guidance_text,
                 }
 
-                use_windowing = self.feature_mode not in ("annotation", "clip") and self.window > 0 and _HAS_POSE
-                if use_windowing:
-                    for windowed in make_windows(sequence, self.window, self.stride or max(1, self.window // 2)):
-                        self.samples.append((windowed, y_cls, quality, error_targets.copy()))
+                for view_name in views_to_load:
+                    if self.feature_mode == "clip":
+                        sequence = self._load_clip_sequence(
+                            row,
+                            clip_features_root=clip_features_root,
+                            clip_view=view_name,
+                            max_frames=clip_max_frames,
+                            subsample_stride=clip_subsample_stride,
+                        )
+                    elif self.feature_mode == "annotation":
+                        sequence = encode_annotation_row(row, ANNOTATION_FEATURE_DIM)
+                        if sequence.shape[0] > self.max_seq_len:
+                            sequence = sequence[-self.max_seq_len:]
+                    else:
+                        sequence = self._load_pose_sequence(
+                            stem,
+                            feature_mode=self.feature_mode,
+                            angles_dir=angles_dir,
+                            keypoints_dir=keypoints_dir,
+                        )
+                    if sequence is None or sequence.shape[0] == 0:
+                        continue
+                    meta = dict(base_meta)
+                    meta["view"] = view_name
+                    use_windowing = self.feature_mode not in ("annotation", "clip") and self.window > 0 and _HAS_POSE
+                    if use_windowing:
+                        for windowed in make_windows(sequence, self.window, self.stride or max(1, self.window // 2)):
+                            self.samples.append((windowed, y_cls, quality, error_targets.copy()))
+                            self.metadata.append(dict(meta))
+                    else:
+                        self.samples.append((sequence, y_cls, quality, error_targets.copy()))
                         self.metadata.append(dict(meta))
-                else:
-                    self.samples.append((sequence, y_cls, quality, error_targets.copy()))
-                    self.metadata.append(dict(meta))
+                    # For non-clip feature modes the sequence is view-agnostic;
+                    # don't duplicate identical samples per view.
+                    if self.feature_mode != "clip":
+                        break
+
+    # Canonical EgoExo-Fitness view list.
+    ALL_VIEWS: Tuple[str, ...] = ("ego_l", "ego_m", "ego_r", "exo_l", "exo_m", "exo_r")
+
+    @classmethod
+    def _resolve_views(cls, spec: str) -> Tuple[str, ...]:
+        """Parse a ``--clip-view`` spec into the ordered tuple of views to load.
+
+        Accepts:
+            "ego_l"                → ("ego_l",)
+            "ego_l,exo_m"          → ("ego_l", "exo_m")
+            "all"                  → all six canonical views
+            "ego" / "exo"          → all three of that family
+        """
+        s = (spec or "").strip().lower()
+        if s in ("all", "*"):
+            return cls.ALL_VIEWS
+        if s == "ego":
+            return tuple(v for v in cls.ALL_VIEWS if v.startswith("ego_"))
+        if s == "exo":
+            return tuple(v for v in cls.ALL_VIEWS if v.startswith("exo_"))
+        if "," in s:
+            parts = tuple(p.strip() for p in s.split(",") if p.strip())
+            return parts or (DEFAULT_CLIP_VIEW,)
+        return (s or DEFAULT_CLIP_VIEW,)
 
     @staticmethod
     def _load_clip_sequence(
@@ -476,13 +600,134 @@ class EgoExoXLSTMDataset(Dataset):
             per_class.setdefault(idx, Counter())[guide] += 1
         return {idx: counter.most_common(1)[0][0] for idx, counter in per_class.items()}
 
+    def build_comment_table(
+        self,
+        class_to_idx: Dict[str, int],
+        num_quality_buckets: int = 5,
+        bucket_edges: Optional[Tuple[float, ...]] = None,
+    ) -> Tuple[Dict[Tuple[int, int], str], Tuple[float, ...]]:
+        """Build a {(class_idx, quality_bucket) → comment} lookup table.
+
+        For each (class, quality-bucket) cell, picks the comment from the training
+        sample whose quality score is closest to the bucket centre. Quality scalars
+        share the supervised axis (`unit` ``[0,1]`` or `likert` ``[1,5]``) from the
+        dataset constructor.
+
+        Returns a tuple ``(table, bucket_edges)`` where ``bucket_edges`` is the
+        sequence of cumulative-distribution boundaries used for bucketing, so the
+        inference path can quantise predicted quality the same way.
+
+        For empty cells (a class with no clips in a given quality bucket), the
+        implementation falls back to the nearest populated **same-class** bucket
+        (never a different exercise class).
+        """
+        dl, dh = self.q_domain_lo, self.q_domain_hi
+        kb = int(num_quality_buckets)
+        if kb < 2:
+            raise ValueError(f"num_quality_buckets must be >= 2 (got {kb})")
+
+        # Default buckets: ordinal Likert 1…5 splits at 1.5…4.5 when K==5 matches the paper scale;
+        # otherwise equal-frequency quantiles within the supervised domain (or uniform cuts if empty).
+        if bucket_edges is None:
+            if self.quality_encoding == "likert" and kb == 5:
+                bucket_edges = (1.5, 2.5, 3.5, 4.5)
+            else:
+                qs = sorted(float(s[2]) for s in self.samples)
+                if not qs:
+                    bucket_edges = tuple(float(x) for x in np.linspace(dl, dh, kb + 1)[1:-1])
+                else:
+                    qs_arr = np.asarray(qs)
+                    edges = [float(np.quantile(qs_arr, (i + 1) / kb)) for i in range(kb - 1)]
+                    bucket_edges = tuple(edges)
+
+        centres = quality_bucket_centres(bucket_edges, domain_lo=dl, domain_hi=dh)
+        num_buckets = len(bucket_edges) + 1
+        if num_buckets != kb:
+            raise ValueError(f"requested K={kb} but edges imply {num_buckets} buckets")
+
+        def _bucket_of(q: float) -> int:
+            return quality_score_to_bucket(float(q), bucket_edges)
+
+        # Group comments by (class_idx, quality_bucket). The retrieval-based
+        # feedback design REQUIRES strict (class, quality) routing — no
+        # cross-class or cross-quality fallback is permitted, because the whole
+        # contract of this lookup is that the returned comment matches both the
+        # predicted exercise AND the predicted quality. We instead fall back to
+        # the NEAREST POPULATED quality bucket of the SAME class when a cell is
+        # empty, never to a different class and never to a different quality
+        # regime (e.g. a poor-quality squat clip will not receive a good-quality
+        # squat comment if any nearer-quality cell of the same class exists).
+        cell_comments: Dict[Tuple[int, int], List[Tuple[float, str]]] = {}
+        for sample, meta in zip(self.samples, self.metadata):
+            cls_name = meta.get("class_name", "")
+            comment = (meta.get("comment") or "").strip()
+            if not cls_name or not comment:
+                continue
+            idx = class_to_idx.get(cls_name)
+            if idx is None:
+                continue
+            q = float(sample[2])
+            bucket = _bucket_of(q)
+            cell_comments.setdefault((idx, bucket), []).append((q, comment))
+
+        def _bucket_centre(bucket_idx: int) -> float:
+            return float(centres[bucket_idx])
+
+        # Pick the medoid comment (training comment with quality closest to
+        # the bucket centre) for each populated (class, bucket) cell. Cells
+        # with no in-bucket clips fall back to the SAME class's nearest
+        # populated quality bucket — never to a different class.
+        table: Dict[Tuple[int, int], str] = {}
+        for cls_idx in class_to_idx.values():
+            # Pre-compute populated buckets for this class, sorted by distance to centre.
+            populated = sorted(b for b in range(num_buckets)
+                               if (cls_idx, b) in cell_comments)
+            for bucket in range(num_buckets):
+                key = (cls_idx, bucket)
+                if key in cell_comments and cell_comments[key]:
+                    centre = _bucket_centre(bucket)
+                    pick = min(cell_comments[key], key=lambda qc: abs(qc[0] - centre))
+                    table[key] = pick[1]
+                elif populated:
+                    # Same-class fallback: take the nearest populated quality bucket.
+                    nearest = min(populated, key=lambda b: abs(b - bucket))
+                    centre = _bucket_centre(nearest)
+                    pick = min(cell_comments[(cls_idx, nearest)],
+                               key=lambda qc: abs(qc[0] - centre))
+                    table[key] = pick[1]
+                # else: leave the cell unset → lookup_comment returns "" for it
+                # (an honest "no information available" instead of a wrong comment).
+        return table, bucket_edges
+
+    def apply_quality_bucket_labels(self, bucket_edges: Tuple[float, ...]) -> None:
+        """Attach discrete quality-bucket IDs (0 … K-1) for classification training.
+
+        Each sample tuple becomes ``(x, y_cls, q_float, q_bucket_idx, errors)``.
+        Call **after** ``build_comment_table`` so bucket edges match the retrieval tables.
+        """
+        edges = tuple(float(e) for e in bucket_edges)
+        new_samples: List[Tuple[np.ndarray, int, float, int, np.ndarray]] = []
+        for tup in self.samples:
+            x, y, q, e = tup
+            qb = quality_score_to_bucket(float(q), edges)
+            new_samples.append((x, int(y), float(q), int(qb), e))
+        self.samples = new_samples  # type: ignore[assignment]
+
     def __getitem__(self, idx: int):
-        x, y, q, e = self.samples[idx]
+        parts = self.samples[idx]
+        if len(parts) == 4:
+            x, y, q, e = parts
+            q_bucket = -1
+        elif len(parts) == 5:
+            x, y, q, q_bucket, e = parts
+        else:
+            raise ValueError(f"unexpected sample tuple length {len(parts)}")
         meta = self.metadata[idx] if idx < len(self.metadata) else {"comment": "", "class_name": "", "guidance": ""}
         return (
             torch.from_numpy(np.asarray(x, dtype=np.float32)),
             torch.tensor(y, dtype=torch.long),
             torch.tensor(q, dtype=torch.float32),
+            torch.tensor(q_bucket, dtype=torch.long),
             torch.from_numpy(np.asarray(e, dtype=np.float32)),
             meta.get("comment", ""),
             meta.get("class_name", ""),
@@ -492,16 +737,12 @@ class EgoExoXLSTMDataset(Dataset):
 def egoexo_collate_fn(batch):
     """Pad variable-length annotation/CLIP sequences to the longest in the batch.
 
-    Returns a 6-tuple: (features, y_cls, y_q, y_err, comments, class_names) where
-    `comments` and `class_names` are plain Python lists (consumed by the comment head).
+    Returns a 7-tuple:
+    ``(features, y_cls, y_q_scalar, y_q_bucket, y_err, comments, class_names)``.
+    ``y_q_bucket`` is ``-1`` when samples have not been labelled with
+    ``apply_quality_bucket_labels`` (regression heads ignore it).
     """
-    items = list(zip(*batch))
-    if len(items) == 4:
-        xs, yc, yq, ye = items
-        comments: Tuple[str, ...] = tuple("" for _ in xs)
-        class_names: Tuple[str, ...] = tuple("" for _ in xs)
-    else:
-        xs, yc, yq, ye, comments, class_names = items
+    xs, yc, yqf, yqb, ye, comments, class_names = list(zip(*batch))
     lengths = [x.shape[0] for x in xs]
     max_t = max(lengths)
     feat_dim = xs[0].shape[-1]
@@ -511,7 +752,8 @@ def egoexo_collate_fn(batch):
     return (
         padded,
         torch.stack(yc),
-        torch.stack(yq),
+        torch.stack(yqf),
+        torch.stack(yqb),
         torch.stack(ye),
         list(comments),
         list(class_names),

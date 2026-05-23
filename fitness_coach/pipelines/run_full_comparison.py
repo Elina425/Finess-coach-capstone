@@ -13,13 +13,13 @@ import numpy as np
 from pathlib import Path
 from typing import Any, List, Optional, Sequence, Tuple
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
 from fitness_coach.core.pose_estimation_core import iter_default_comparison_detectors
 
 
 def _model_display_name(key: str) -> str:
     names = {
         "mediapipe": "MediaPipe",
+        "movenet_lightning": "MoveNet Lightning",
         "yolo": "YOLOv8-Pose",
         "rtmpose_x": "RTMPose-X",
         "vitpose": "ViTPose",
@@ -119,8 +119,13 @@ def generate_comparison_summary_png(
     video_count: int,
     out_path: Path,
     json_path: Optional[Path] = None,
+    *,
+    subtitle: Optional[str] = None,
 ) -> None:
-    """Build comparison_summary.png from measured benchmark metrics."""
+    """Build comparison_summary.png from measured benchmark metrics (paper-friendly layout).
+
+    ``subtitle``: optional second line under the main title (e.g. Riccio exercise name).
+    """
     if not metrics_by_key:
         return
 
@@ -131,22 +136,25 @@ def generate_comparison_summary_png(
     conf = [metrics_by_key[k].avg_confidence * 100.0 for k in keys]
     det = [metrics_by_key[k].detection_rate for k in keys]
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8.5))
+    fig.patch.set_facecolor("white")
+    title_main = f"Pose model benchmark  ·  n = {video_count} clips"
+    title = f"{title_main}\n{subtitle}" if subtitle else title_main
     fig.suptitle(
-        "Pose model comparison (measured on sample videos — same clips as skeleton PNGs)\n"
-        "FPS / latency / confidence / detection rate from ModelComparison.benchmark_video",
-        fontsize=12,
+        title,
+        fontsize=13,
         fontweight="bold",
+        y=0.99 if subtitle else 0.98,
     )
 
     colors = plt.cm.Set2(np.linspace(0, 1, max(len(keys), 3)))
 
     ax1 = axes[0, 0]
-    bars = ax1.bar(labels, fps, color=colors[: len(keys)], edgecolor="black", linewidth=1)
-    ax1.set_ylabel("FPS", fontweight="bold")
-    ax1.set_title("Throughput (higher is better)", fontweight="bold")
-    ax1.grid(axis="y", alpha=0.3)
-    plt.setp(ax1.xaxis.get_majorticklabels(), rotation=25, ha="right")
+    bars = ax1.bar(labels, fps, color=colors[: len(keys)], edgecolor="black", linewidth=0.6)
+    ax1.set_ylabel("FPS")
+    ax1.set_title("Throughput (↑)", fontsize=11, fontweight="bold")
+    ax1.grid(axis="y", alpha=0.35, linestyle="--")
+    plt.setp(ax1.xaxis.get_majorticklabels(), rotation=22, ha="right")
     for bar, val in zip(bars, fps):
         ax1.text(
             bar.get_x() + bar.get_width() / 2.0,
@@ -155,15 +163,14 @@ def generate_comparison_summary_png(
             ha="center",
             va="bottom",
             fontsize=8,
-            fontweight="bold",
         )
 
     ax2 = axes[0, 1]
-    bars2 = ax2.bar(labels, inf_ms, color=colors[: len(keys)], edgecolor="black", linewidth=1)
-    ax2.set_ylabel("ms / frame (mean)", fontweight="bold")
-    ax2.set_title("Latency (lower is better)", fontweight="bold")
-    ax2.grid(axis="y", alpha=0.3)
-    plt.setp(ax2.xaxis.get_majorticklabels(), rotation=25, ha="right")
+    bars2 = ax2.bar(labels, inf_ms, color=colors[: len(keys)], edgecolor="black", linewidth=0.6)
+    ax2.set_ylabel("ms / frame (mean)")
+    ax2.set_title("Latency (↓)", fontsize=11, fontweight="bold")
+    ax2.grid(axis="y", alpha=0.35, linestyle="--")
+    plt.setp(ax2.xaxis.get_majorticklabels(), rotation=22, ha="right")
     for bar, val in zip(bars2, inf_ms):
         ax2.text(
             bar.get_x() + bar.get_width() / 2.0,
@@ -172,20 +179,19 @@ def generate_comparison_summary_png(
             ha="center",
             va="bottom",
             fontsize=8,
-            fontweight="bold",
         )
 
     ax3 = axes[1, 0]
     x = np.arange(len(keys))
     w = 0.35
-    ax3.bar(x - w / 2, conf, w, label="Mean conf. ×100", color="#4ECDC4", edgecolor="black")
-    ax3.bar(x + w / 2, det, w, label="Det. rate %", color="#FF6B6B", edgecolor="black")
+    ax3.bar(x - w / 2, conf, w, label="Mean confidence ×100", color="#4ECDC4", edgecolor="black", linewidth=0.5)
+    ax3.bar(x + w / 2, det, w, label="Detection rate %", color="#FF6B6B", edgecolor="black", linewidth=0.5)
     ax3.set_xticks(x)
-    ax3.set_xticklabels(labels, rotation=25, ha="right")
-    ax3.set_ylabel("Value", fontweight="bold")
-    ax3.set_title("Confidence & detection rate (higher is better)", fontweight="bold")
-    ax3.legend(loc="upper right", fontsize=8)
-    ax3.grid(axis="y", alpha=0.3)
+    ax3.set_xticklabels(labels, rotation=22, ha="right")
+    ax3.set_ylabel("Value")
+    ax3.set_title("Confidence & detection (↑)", fontsize=11, fontweight="bold")
+    ax3.legend(loc="upper right", fontsize=8, framealpha=0.9)
+    ax3.grid(axis="y", alpha=0.35, linestyle="--")
 
     ax4 = axes[1, 1]
     ax4.axis("off")
@@ -195,41 +201,37 @@ def generate_comparison_summary_png(
     bd = best.get("best_detection_rate", b)
     bl = best.get("lowest_latency_ms", b)
 
-    summary_text = f"""
-MEASURED ON {video_count} SAMPLE VIDEO(S) (same as skeleton grids)
-
-BEST MODEL BY METRIC
-  • Highest FPS:        {_model_display_name(bf)}  ({metrics_by_key[bf].avg_fps:.1f} FPS)
-  • Lowest latency:     {_model_display_name(bl)}  ({metrics_by_key[bl].avg_inference_time_ms:.1f} ms)
-  • Highest confidence: {_model_display_name(bc)}  ({metrics_by_key[bc].avg_confidence:.4f})
-  • Best det. rate:     {_model_display_name(bd)}  ({metrics_by_key[bd].detection_rate:.1f}%)
-
-BALANCED PICK (normalize FPS + conf + det; tie → listed order)
-  → {_model_display_name(b)}  — best overall tradeoff on this benchmark
-
-NOTE: Skeleton PNGs are qualitative; this chart uses the same clips with
-ModelComparison (timing + mean joint confidence + % frames with conf>0.3).
-For keypoint error vs ViTPose, run: evaluate_pose_metrics.py
-"""
+    summary_lines = [
+        "Best by metric",
+        f"  Throughput ··· {_model_display_name(bf)}  ({metrics_by_key[bf].avg_fps:.1f} FPS)",
+        f"  Latency ··· {_model_display_name(bl)}  ({metrics_by_key[bl].avg_inference_time_ms:.1f} ms)",
+        f"  Confidence ··· {_model_display_name(bc)}  ({metrics_by_key[bc].avg_confidence:.3f})",
+        f"  Detection rate ··· {_model_display_name(bd)}  ({metrics_by_key[bd].detection_rate:.1f}%)",
+        "",
+        "Balanced pick (norm. FPS + conf. + det.)",
+        f"  → {_model_display_name(b)}",
+    ]
     ax4.text(
-        0.04,
-        0.96,
-        summary_text,
+        0.5,
+        0.52,
+        "\n".join(summary_lines),
         transform=ax4.transAxes,
-        fontfamily="monospace",
-        fontsize=9,
-        verticalalignment="top",
-        bbox=dict(boxstyle="round", facecolor="lightblue", alpha=0.75),
+        ha="center",
+        va="center",
+        fontsize=10,
+        linespacing=1.35,
+        bbox=dict(boxstyle="round,pad=0.5", facecolor="#f7f7f7", edgecolor="#cccccc", linewidth=0.8),
     )
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    plt.tight_layout(rect=[0, 0, 1, 0.91 if subtitle else 0.95])
+    plt.savefig(out_path, dpi=200, bbox_inches="tight", facecolor="white")
     plt.close()
 
     if json_path is not None:
         payload = {
             "videos_used": video_count,
+            **({"subtitle": subtitle} if subtitle else {}),
             "models": {
                 k: {
                     "avg_fps": float(metrics_by_key[k].avg_fps),

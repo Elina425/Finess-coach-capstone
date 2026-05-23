@@ -1,14 +1,15 @@
 """
 PyTorch Dataset: 30-frame windows over angle sequences (T, F) with exercise class + quality.
 
-F=8 angles; F=34 coords-only; F=42 mixed (Riccio-style, arXiv:2411.11548).
+F=8 angles; F=34 coords-only; F=42 mixed (Riccio-style); F=D frozen CNN crop embeddings via ``vit_backbone`` / ``resnet_backbone``
+NPZ exports (default ViT D=256 ViTPose-S COCO; ResNet D is 512 for ResNet-18/34 or 2048 for ResNet-50/101).
 """
 
 from __future__ import annotations
 
 import csv
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Set, Tuple
 
 import numpy as np
 import torch
@@ -24,6 +25,34 @@ from fitness_coach.core.biomechanical_features import (
     compute_mixed_sequence_features,
     keypoints_npz_coords_already_normalized,
 )
+
+
+def streaming_train_windows_mean_std(
+    train_windows: List[Tuple[np.ndarray, int, float]],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Per-dimension mean / std across all timestep rows ( population std ddof=0 ).
+
+    Avoids ``np.stack`` of all windows, which blows RAM with long sequences and high D (e.g. 2048 ).
+    Matches the previous stacked implementation for ``tensor.std(axis=0)`` semantics.
+    """
+    if not train_windows:
+        raise ValueError("streaming_train_windows_mean_std: empty training window list")
+    feat_dim = int(np.asarray(train_windows[0][0]).shape[-1])
+    total_rows = sum(int(np.asarray(w).shape[0]) for w, _, _ in train_windows)
+    if total_rows <= 0:
+        raise ValueError("no timestep rows across training windows")
+    sum_feat = np.zeros(feat_dim, dtype=np.float64)
+    for w, _, _ in train_windows:
+        sum_feat += np.asarray(w, dtype=np.float64).sum(axis=0)
+    mu = sum_feat / float(total_rows)
+    sse = np.zeros(feat_dim, dtype=np.float64)
+    for w, _, _ in train_windows:
+        d = np.asarray(w, dtype=np.float64) - mu
+        sse += np.sum(d * d, axis=0)
+    spread = np.sqrt(sse / float(total_rows)).astype(np.float32) + np.float32(1e-8)
+    scale_mean = mu.astype(np.float32)
+    scale_std = spread
+    return scale_mean, scale_std
 
 
 def load_angles_npz(path: Path) -> np.ndarray:
@@ -64,10 +93,7 @@ def fit_standardizer_from_dataset(ds: "ExerciseAngleWindowDataset") -> Tuple[np.
     """Per-feature mean/std over all training windows (StandardScaler-style; Riccio §3.3.1)."""
     if not ds.samples:
         raise ValueError("empty dataset")
-    xs = np.stack([s[0] for s in ds.samples], axis=0)
-    x2 = xs.reshape(-1, xs.shape[-1])
-    mean = x2.mean(axis=0).astype(np.float32)
-    std = x2.std(axis=0).astype(np.float32) + np.float32(1e-8)
+    mean, std = streaming_train_windows_mean_std(ds.samples)
     return mean, std
 
 
@@ -197,6 +223,54 @@ def load_index_rows(path: Path) -> List[Dict[str, str]]:
         return list(csv.DictReader(f))
 
 
+def _window_label_pose(
+    poses: np.ndarray,
+    start: int,
+    window: int,
+    *,
+    window_label: str,
+) -> str:
+    """Map a sliding window to a coarse class from the first or last frame's ``pose`` string."""
+    wl = (window_label or "last").strip().lower()
+    if wl == "first":
+        idx = int(start)
+    elif wl == "last":
+        idx = int(start + window - 1)
+    else:
+        raise ValueError(f"window_label must be 'first' or 'last', got {window_label!r}")
+    return coarse_exercise_from_pose(str(poses[idx]))
+
+
+def normalized_coarse_class(name: object) -> str:
+    """Lowercase, collapse spaces, map ``_``/``-`` to space (for matching CSV / pose labels)."""
+    s = str(name).strip().lower().replace("_", " ").replace("-", " ")
+    return " ".join(s.split())
+
+
+def coarse_exclusion_normalized_set(names: Optional[Sequence[str]]) -> Set[str]:
+    if not names:
+        return set()
+    return {normalized_coarse_class(x) for x in names if str(x).strip()}
+
+
+def filter_kaggle_triples_excluding_coarse(
+    raw: List[Tuple[np.ndarray, str, float]],
+    exclude_norm: Set[str],
+) -> List[Tuple[np.ndarray, str, float]]:
+    if not exclude_norm:
+        return raw
+    return [t for t in raw if normalized_coarse_class(t[1]) not in exclude_norm]
+
+
+def filter_kaggle_quads_excluding_coarse(
+    raw: List[Tuple[np.ndarray, str, float, int]],
+    exclude_norm: Set[str],
+) -> List[Tuple[np.ndarray, str, float, int]]:
+    if not exclude_norm:
+        return raw
+    return [t for t in raw if normalized_coarse_class(t[1]) not in exclude_norm]
+
+
 def coarse_exercise_from_pose(pose: str) -> str:
     """
     Map phase labels (e.g. squats_up, jumping_jacks_down) to base exercise name
@@ -245,6 +319,166 @@ def load_kaggle_angles_and_labels(
     return ang, poses, video_id
 
 
+def load_kaggle_frame_features_and_labels(
+    angles_dir: Path,
+    stem: str = "kaggle_exercise_recognition",
+) -> Tuple[np.ndarray, np.ndarray, Optional[np.ndarray]]:
+    """Load ``frame_features`` (T, D) from Riccio ``*_biomechanics.npz`` (``vit_backbone`` or ``resnet_backbone`` export)."""
+    ang_path = angles_dir / f"{stem}_biomechanics.npz"
+    lab_path = angles_dir / f"{stem}_labels.npz"
+    if not ang_path.is_file():
+        raise FileNotFoundError(f"Missing {ang_path}")
+    if not lab_path.is_file():
+        raise FileNotFoundError(f"Missing {lab_path} (need per-frame pose labels)")
+    d = np.load(ang_path, allow_pickle=True)
+    if "frame_features" not in d.files:
+        raise ValueError(
+            f"{ang_path} has no 'frame_features' array — export with "
+            "riccio_kaggle_video_pipeline.py --representation vit_backbone or resnet_backbone"
+        )
+    fe = np.asarray(d["frame_features"], dtype=np.float32)
+    if fe.ndim != 2:
+        raise ValueError(f"Bad frame_features shape in {ang_path}: {fe.shape}")
+    lab = np.load(lab_path, allow_pickle=True)
+    if "pose" not in lab:
+        raise ValueError(f"{lab_path} must contain 'pose' array")
+    poses = np.asarray(lab["pose"], dtype=object)
+    if len(poses) != len(fe):
+        raise ValueError(f"pose length {len(poses)} != frame_features length {len(fe)} for {stem}")
+    video_id: Optional[np.ndarray] = None
+    if "video_id" in lab:
+        video_id = np.asarray(lab["video_id"])
+        if video_id.shape[0] != len(fe):
+            raise ValueError(
+                f"video_id length {video_id.shape[0]} != frame_features length {len(fe)} for {stem}"
+            )
+        video_id = video_id.astype(np.int32, copy=False)
+    return fe, poses, video_id
+
+
+def build_kaggle_frame_feature_datasets(
+    angles_dir: Path,
+    *,
+    stem: str = "kaggle_exercise_recognition",
+    window: int = 30,
+    stride: int = 15,
+    test_ratio: float = 0.15,
+    val_ratio: float = 0.15,
+    seed: int = 42,
+    standardize: bool = True,
+    quality_default: float = 0.75,
+    window_label: str = "last",
+    exclude_coarse_classes: Optional[Sequence[str]] = None,
+) -> Tuple[Dataset, Dataset, Dataset, Dict[str, int], Dict[int, str], Optional[np.ndarray], Optional[np.ndarray]]:
+    """Same splits as angle/mixed Kaggle loaders, but each timestep is a frozen CNN crop embedding (T, D)."""
+    fe, poses, video_id = load_kaggle_frame_features_and_labels(angles_dir, stem=stem)
+    ex_norm = coarse_exclusion_normalized_set(exclude_coarse_classes)
+    use_video_split = video_id is not None and int(np.unique(video_id).size) > 1
+
+    if use_video_split:
+        assert video_id is not None
+        raw_v = build_kaggle_angle_window_samples_by_video(
+            fe,
+            poses,
+            video_id,
+            window=window,
+            stride=stride,
+            quality_default=quality_default,
+            window_label=window_label,
+        )
+        if not raw_v:
+            raise ValueError("No windows built from Kaggle frame features (per-video)")
+        raw_v = filter_kaggle_quads_excluding_coarse(raw_v, ex_norm)
+        if not raw_v:
+            raise ValueError(
+                "No windows left from Kaggle frame features (per-video) after coarse-class exclusion; "
+                "widen or clear exclude_coarse_classes."
+            )
+        class_names = sorted({c for _, c, _, _ in raw_v})
+        class_to_idx = {n: i for i, n in enumerate(class_names)}
+        idx_to_class = {i: n for n, i in class_to_idx.items()}
+
+        uniq_vids = np.unique(np.asarray([t[3] for t in raw_v], dtype=np.int32))
+        vid_to_label = {}
+        for v in uniq_vids:
+            frame0 = int(np.nonzero(video_id == v)[0][0])
+            vid_to_label[int(v)] = coarse_exercise_from_pose(str(poses[frame0]))
+        y_vid = np.array([class_to_idx[vid_to_label[int(v)]] for v in uniq_vids], dtype=int)
+        vidx = np.arange(len(uniq_vids), dtype=int)
+        train_vi, val_vi, test_vi = stratified_train_val_test_split(
+            vidx,
+            y_vid,
+            test_ratio=test_ratio,
+            val_ratio=val_ratio,
+            seed=seed,
+        )
+        train_videos = set(uniq_vids[train_vi].tolist())
+        val_videos = set(uniq_vids[val_vi].tolist())
+        test_videos = set(uniq_vids[test_vi].tolist())
+
+        train_s: List[Tuple[np.ndarray, int, float]] = []
+        val_s: List[Tuple[np.ndarray, int, float]] = []
+        test_s: List[Tuple[np.ndarray, int, float]] = []
+        for w, c, q, vid in raw_v:
+            triplet = (w, class_to_idx[c], q)
+            if vid in train_videos:
+                train_s.append(triplet)
+            elif vid in val_videos:
+                val_s.append(triplet)
+            elif vid in test_videos:
+                test_s.append(triplet)
+    else:
+        raw = build_kaggle_angle_window_samples(
+            fe,
+            poses,
+            window=window,
+            stride=stride,
+            quality_default=quality_default,
+            window_label=window_label,
+        )
+        raw = filter_kaggle_triples_excluding_coarse(raw, ex_norm)
+        if not raw:
+            raise ValueError(
+                "No windows left from Kaggle frame features after coarse-class exclusion; "
+                "widen or clear exclude_coarse_classes."
+            )
+
+        class_names = sorted({c for _, c, _ in raw})
+        class_to_idx = {n: i for i, n in enumerate(class_names)}
+        idx_to_class = {i: n for n, i in class_to_idx.items()}
+
+        samples_idxed: List[Tuple[np.ndarray, int, float]] = [
+            (w, class_to_idx[c], q) for w, c, q in raw
+        ]
+        indices = np.arange(len(samples_idxed), dtype=int)
+        y_all = np.array([samples_idxed[i][1] for i in range(len(samples_idxed))], dtype=int)
+
+        train_idx, val_idx, test_idx = stratified_train_val_test_split(
+            indices,
+            y_all,
+            test_ratio=test_ratio,
+            val_ratio=val_ratio,
+            seed=seed,
+        )
+
+        def take(idxs: np.ndarray) -> List[Tuple[np.ndarray, int, float]]:
+            return [samples_idxed[int(i)] for i in idxs]
+
+        train_s = take(train_idx)
+        val_s = take(val_idx)
+        test_s = take(test_idx)
+
+    scale_mean: Optional[np.ndarray] = None
+    scale_std: Optional[np.ndarray] = None
+    if standardize and train_s:
+        scale_mean, scale_std = streaming_train_windows_mean_std(train_s)
+
+    train_ds = TensorWindowDataset(train_s, scale_mean, scale_std)
+    val_ds = TensorWindowDataset(val_s, scale_mean, scale_std)
+    test_ds = TensorWindowDataset(test_s, scale_mean, scale_std)
+    return train_ds, val_ds, test_ds, class_to_idx, idx_to_class, scale_mean, scale_std
+
+
 def build_kaggle_angle_window_samples(
     angles: np.ndarray,
     poses: np.ndarray,
@@ -252,8 +486,9 @@ def build_kaggle_angle_window_samples(
     window: int,
     stride: int,
     quality_default: float = 0.75,
+    window_label: str = "last",
 ) -> List[Tuple[np.ndarray, str, float]]:
-    """Sliding windows; label = coarse exercise from last frame in window."""
+    """Sliding windows; label = coarse exercise from first or last frame in window (PosePulse: ``first``)."""
     ang = np.asarray(angles, dtype=np.float32)
     ang = np.nan_to_num(ang, nan=0.0, posinf=0.0, neginf=0.0)
     T = ang.shape[0]
@@ -262,14 +497,96 @@ def build_kaggle_angle_window_samples(
         pad = np.zeros((window - T, ang.shape[1]), dtype=np.float32)
         ang = np.vstack([ang, pad])
         T = window
-        cls = coarse_exercise_from_pose(str(poses[-1]))
+        if (window_label or "last").strip().lower() == "first":
+            cls = coarse_exercise_from_pose(str(poses[0]))
+        else:
+            cls = coarse_exercise_from_pose(str(poses[-1]))
         out.append((ang.copy(), cls, float(quality_default)))
         return out
     for start in range(0, T - window + 1, stride):
         w = ang[start : start + window].copy()
-        last_pose = poses[start + window - 1]
-        cls = coarse_exercise_from_pose(str(last_pose))
+        cls = _window_label_pose(poses, start, window, window_label=window_label)
         out.append((w, cls, float(quality_default)))
+    return out
+
+
+def build_kaggle_mixed_window_samples(
+    kp: np.ndarray,
+    angles: np.ndarray,
+    poses: np.ndarray,
+    *,
+    window: int,
+    stride: int,
+    quality_default: float = 0.75,
+    window_label: str = "last",
+) -> List[Tuple[np.ndarray, str, float]]:
+    """Aligned (angles ∥ keypoints) windows on one timeline → (window, 42) per sample."""
+    kp = np.asarray(kp, dtype=np.float32)
+    kp = np.nan_to_num(kp, nan=0.0, posinf=0.0, neginf=0.0)
+    ang = np.asarray(angles, dtype=np.float32)
+    ang = np.nan_to_num(ang, nan=0.0, posinf=0.0, neginf=0.0)
+    if kp.shape[0] != ang.shape[0]:
+        raise ValueError(f"kp T={kp.shape[0]} != angles T={ang.shape[0]} for mixed features")
+    T = ang.shape[0]
+    out: List[Tuple[np.ndarray, str, float]] = []
+    if T < window:
+        pad_a = np.zeros((window - T, ang.shape[1]), dtype=np.float32)
+        pad_k = np.zeros((window - T, 17, 2), dtype=np.float32)
+        aw = np.vstack([ang, pad_a])
+        kw = np.vstack([kp, pad_k]).reshape(window, -1)
+        combined = np.concatenate([aw, kw], axis=1).astype(np.float32)
+        if (window_label or "last").strip().lower() == "first":
+            cls = coarse_exercise_from_pose(str(poses[0]))
+        else:
+            cls = coarse_exercise_from_pose(str(poses[-1]))
+        out.append((combined, cls, float(quality_default)))
+        return out
+    for start in range(0, T - window + 1, stride):
+        aw = ang[start : start + window].copy()
+        kw = kp[start : start + window].reshape(window, -1).copy()
+        combined = np.concatenate([aw, kw], axis=1).astype(np.float32)
+        cls = _window_label_pose(poses, start, window, window_label=window_label)
+        out.append((combined, cls, float(quality_default)))
+    return out
+
+
+def build_kaggle_mixed_window_samples_by_video(
+    kp: np.ndarray,
+    angles: np.ndarray,
+    poses: np.ndarray,
+    video_id: np.ndarray,
+    *,
+    window: int,
+    stride: int,
+    quality_default: float = 0.75,
+    window_label: str = "last",
+) -> List[Tuple[np.ndarray, str, float, int]]:
+    """Per-video aligned mixed windows; label from first or last frame pose in window."""
+    kp = np.asarray(kp, dtype=np.float32)
+    kp = np.nan_to_num(kp, nan=0.0, posinf=0.0, neginf=0.0)
+    ang = np.asarray(angles, dtype=np.float32)
+    ang = np.nan_to_num(ang, nan=0.0, posinf=0.0, neginf=0.0)
+    if kp.shape[0] != ang.shape[0]:
+        raise ValueError(f"kp T={kp.shape[0]} != angles T={ang.shape[0]} for mixed features")
+    vid = np.asarray(video_id, dtype=np.int32).ravel()
+    if vid.shape[0] != ang.shape[0]:
+        raise ValueError("video_id length must match angles time dimension")
+    out: List[Tuple[np.ndarray, str, float, int]] = []
+    for v in np.unique(vid):
+        m = vid == int(v)
+        kp_v = kp[m]
+        ang_v = ang[m]
+        pose_v = poses[m]
+        for w, c, q in build_kaggle_mixed_window_samples(
+            kp_v,
+            ang_v,
+            pose_v,
+            window=window,
+            stride=stride,
+            quality_default=quality_default,
+            window_label=window_label,
+        ):
+            out.append((w, c, q, int(v)))
     return out
 
 
@@ -281,6 +598,7 @@ def build_kaggle_angle_window_samples_by_video(
     window: int,
     stride: int,
     quality_default: float = 0.75,
+    window_label: str = "last",
 ) -> List[Tuple[np.ndarray, str, float, int]]:
     """Windows only within each video segment; no window crosses a ``video_id`` boundary.
 
@@ -302,6 +620,7 @@ def build_kaggle_angle_window_samples_by_video(
             window=window,
             stride=stride,
             quality_default=quality_default,
+            window_label=window_label,
         ):
             out.append((w, c, q, int(v)))
     return out
@@ -373,6 +692,8 @@ def build_kaggle_angle_datasets(
     seed: int = 42,
     standardize: bool = True,
     quality_default: float = 0.75,
+    window_label: str = "last",
+    exclude_coarse_classes: Optional[Sequence[str]] = None,
 ) -> Tuple[Dataset, Dataset, Dataset, Dict[str, int], Dict[int, str], Optional[np.ndarray], Optional[np.ndarray]]:
     """
     Build train/val/test datasets from Kaggle pipeline biomechanics + labels NPZs.
@@ -382,8 +703,12 @@ def build_kaggle_angle_datasets(
     video, splits are **by video** (stratified by each video's exercise class) so windows from the
     same recording never appear in more than one split. Otherwise splits are stratified by window
     label (legacy / single-timeline exports).
+
+    ``exclude_coarse_classes``: drop any window whose coarse label matches (normalized) one of
+    these strings, e.g. ``["hammer curl"]`` to train on four base exercises only.
     """
     angles, poses, video_id = load_kaggle_angles_and_labels(angles_dir, stem=stem)
+    ex_norm = coarse_exclusion_normalized_set(exclude_coarse_classes)
     use_video_split = (
         video_id is not None and int(np.unique(video_id).size) > 1
     )
@@ -397,9 +722,16 @@ def build_kaggle_angle_datasets(
             window=window,
             stride=stride,
             quality_default=quality_default,
+            window_label=window_label,
         )
         if not raw_v:
             raise ValueError("No windows built from Kaggle angles (per-video)")
+        raw_v = filter_kaggle_quads_excluding_coarse(raw_v, ex_norm)
+        if not raw_v:
+            raise ValueError(
+                "No windows left from Kaggle angles (per-video) after coarse-class exclusion; "
+                "widen or clear exclude_coarse_classes."
+            )
         class_names = sorted({c for _, c, _, _ in raw_v})
         class_to_idx = {n: i for i, n in enumerate(class_names)}
         idx_to_class = {i: n for n, i in class_to_idx.items()}
@@ -440,9 +772,14 @@ def build_kaggle_angle_datasets(
             window=window,
             stride=stride,
             quality_default=quality_default,
+            window_label=window_label,
         )
+        raw = filter_kaggle_triples_excluding_coarse(raw, ex_norm)
         if not raw:
-            raise ValueError("No windows built from Kaggle angles")
+            raise ValueError(
+                "No windows left from Kaggle angles after coarse-class exclusion; "
+                "widen or clear exclude_coarse_classes."
+            )
 
         class_names = sorted({c for _, c, _ in raw})
         class_to_idx = {n: i for i, n in enumerate(class_names)}
@@ -472,10 +809,145 @@ def build_kaggle_angle_datasets(
     scale_mean: Optional[np.ndarray] = None
     scale_std: Optional[np.ndarray] = None
     if standardize and train_s:
-        xs = np.stack([s[0] for s in train_s], axis=0)
-        flat = xs.reshape(-1, xs.shape[-1])
-        scale_mean = flat.mean(axis=0).astype(np.float32)
-        scale_std = (flat.std(axis=0) + 1e-8).astype(np.float32)
+        scale_mean, scale_std = streaming_train_windows_mean_std(train_s)
+
+    train_ds = TensorWindowDataset(train_s, scale_mean, scale_std)
+    val_ds = TensorWindowDataset(val_s, scale_mean, scale_std)
+    test_ds = TensorWindowDataset(test_s, scale_mean, scale_std)
+    return train_ds, val_ds, test_ds, class_to_idx, idx_to_class, scale_mean, scale_std
+
+
+def build_kaggle_mixed_datasets(
+    data_dir: Path,
+    *,
+    stem: str = "kaggle_exercise_recognition",
+    window: int = 30,
+    stride: int = 15,
+    test_ratio: float = 0.15,
+    val_ratio: float = 0.15,
+    seed: int = 42,
+    standardize: bool = True,
+    quality_default: float = 0.75,
+    window_label: str = "last",
+    exclude_coarse_classes: Optional[Sequence[str]] = None,
+) -> Tuple[Dataset, Dataset, Dataset, Dict[str, int], Dict[int, str], Optional[np.ndarray], Optional[np.ndarray]]:
+    """
+    Angles (8) + flattened normalized keypoints (34) per frame → (T_win, 42), same splits as
+    :func:`build_kaggle_angle_datasets` (per-video when ``video_id`` has multiple videos).
+
+    Lazy-imports keypoint loader to avoid import cycles with ``exercise_stgcn_dataset``.
+    """
+    from fitness_coach.datasets.exercise_stgcn_dataset import load_kaggle_keypoints_and_labels
+
+    angles, poses, video_id = load_kaggle_angles_and_labels(data_dir, stem=stem)
+    ex_norm = coarse_exclusion_normalized_set(exclude_coarse_classes)
+    kp, poses_kp = load_kaggle_keypoints_and_labels(data_dir, stem=stem)
+    if kp.shape[0] != angles.shape[0] or len(poses_kp) != len(poses):
+        raise ValueError(
+            "Keypoints and angles must share the same timeline length for mixed mode "
+            f"(kp {kp.shape[0]}, angles {angles.shape[0]})"
+        )
+
+    use_video_split = video_id is not None and int(np.unique(video_id).size) > 1
+
+    if use_video_split:
+        assert video_id is not None
+        raw_v = build_kaggle_mixed_window_samples_by_video(
+            kp,
+            angles,
+            poses,
+            video_id,
+            window=window,
+            stride=stride,
+            quality_default=quality_default,
+            window_label=window_label,
+        )
+        if not raw_v:
+            raise ValueError("No windows built from Kaggle mixed features (per-video)")
+        raw_v = filter_kaggle_quads_excluding_coarse(raw_v, ex_norm)
+        if not raw_v:
+            raise ValueError(
+                "No windows left from Kaggle mixed features (per-video) after coarse-class exclusion; "
+                "widen or clear exclude_coarse_classes."
+            )
+        class_names = sorted({c for _, c, _, _ in raw_v})
+        class_to_idx = {n: i for i, n in enumerate(class_names)}
+        idx_to_class = {i: n for n, i in class_to_idx.items()}
+
+        uniq_vids = np.unique(np.asarray([t[3] for t in raw_v], dtype=np.int32))
+        vid_to_label = {}
+        for v in uniq_vids:
+            frame0 = int(np.nonzero(video_id == v)[0][0])
+            vid_to_label[int(v)] = coarse_exercise_from_pose(str(poses[frame0]))
+        y_vid = np.array([class_to_idx[vid_to_label[int(v)]] for v in uniq_vids], dtype=int)
+        vidx = np.arange(len(uniq_vids), dtype=int)
+        train_vi, val_vi, test_vi = stratified_train_val_test_split(
+            vidx,
+            y_vid,
+            test_ratio=test_ratio,
+            val_ratio=val_ratio,
+            seed=seed,
+        )
+        train_videos = set(uniq_vids[train_vi].tolist())
+        val_videos = set(uniq_vids[val_vi].tolist())
+        test_videos = set(uniq_vids[test_vi].tolist())
+
+        train_s: List[Tuple[np.ndarray, int, float]] = []
+        val_s: List[Tuple[np.ndarray, int, float]] = []
+        test_s: List[Tuple[np.ndarray, int, float]] = []
+        for w, c, q, vid in raw_v:
+            triplet = (w, class_to_idx[c], q)
+            if vid in train_videos:
+                train_s.append(triplet)
+            elif vid in val_videos:
+                val_s.append(triplet)
+            elif vid in test_videos:
+                test_s.append(triplet)
+    else:
+        raw = build_kaggle_mixed_window_samples(
+            kp,
+            angles,
+            poses,
+            window=window,
+            stride=stride,
+            quality_default=quality_default,
+            window_label=window_label,
+        )
+        if not raw:
+            raise ValueError("No windows built from Kaggle mixed features")
+        raw = filter_kaggle_triples_excluding_coarse(raw, ex_norm)
+        if not raw:
+            raise ValueError(
+                "No windows left from Kaggle mixed features after coarse-class exclusion; "
+                "widen or clear exclude_coarse_classes."
+            )
+        class_names = sorted({c for _, c, _ in raw})
+        class_to_idx = {n: i for i, n in enumerate(class_names)}
+        idx_to_class = {i: n for n, i in class_to_idx.items()}
+        samples_idxed: List[Tuple[np.ndarray, int, float]] = [
+            (w, class_to_idx[c], q) for w, c, q in raw
+        ]
+        indices = np.arange(len(samples_idxed), dtype=int)
+        y_all = np.array([samples_idxed[i][1] for i in range(len(samples_idxed))], dtype=int)
+        train_idx, val_idx, test_idx = stratified_train_val_test_split(
+            indices,
+            y_all,
+            test_ratio=test_ratio,
+            val_ratio=val_ratio,
+            seed=seed,
+        )
+
+        def take(idxs: np.ndarray) -> List[Tuple[np.ndarray, int, float]]:
+            return [samples_idxed[int(i)] for i in idxs]
+
+        train_s = take(train_idx)
+        val_s = take(val_idx)
+        test_s = take(test_idx)
+
+    scale_mean: Optional[np.ndarray] = None
+    scale_std: Optional[np.ndarray] = None
+    if standardize and train_s:
+        scale_mean, scale_std = streaming_train_windows_mean_std(train_s)
 
     train_ds = TensorWindowDataset(train_s, scale_mean, scale_std)
     val_ds = TensorWindowDataset(val_s, scale_mean, scale_std)

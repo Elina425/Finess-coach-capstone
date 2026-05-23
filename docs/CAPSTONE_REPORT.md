@@ -154,7 +154,90 @@ Export JSON with `--json-out`, then generate figures:
 
 ---
 
-## 9. Personalisation (roadmap)
+## 9. Multi-task xLSTM training on EgoExo4D
+
+### 9.1 Motivation
+
+The **EgoExo4D Fitness** dataset provides egocentric and exocentric views of real fitness activities alongside rich textual coaching commentary. Compared with the single-task BiLSTM of §5–6, this experiment jointly learns **movement quality regression** and **comment quality classification** from CLIP visual features, providing a more holistic coaching signal and stress-testing the model on a more complex, naturalistic dataset.
+
+### 9.2 Model architecture
+
+The backbone is an **xLSTM** (extended LSTM) sequence encoder operating on CLIP ViT-L/14 visual features extracted from multi-view video streams (`--clip-view all`). Each clip is sub-sampled with stride 3 up to a maximum of 300 frames, then segmented into 60-frame windows with stride 30. Key architectural choices:
+
+- 8-layer xLSTM stack with a pure mLSTM block pattern (`mmmmmmmm`).  
+- Hidden size 256, 4 attention heads, convolution kernel size 4, projection factor 1.333.  
+- Dropout 0.15.  
+- **Multi-view fusion module** (`--use-fusion`, fusion dim 128) aggregates ego and exo streams before the sequence encoder.  
+- **Attention pooling** (`--use-attention-pool`) over the temporal dimension replaces simple mean pooling, allowing the model to weight informative frames more heavily.  
+- The backbone was **frozen** and only the last **2 layers** were fine-tuned (`--freeze-backbone --unfreeze-last-n 2`), keeping training stable with a limited annotation budget.
+
+### 9.3 Multi-task outputs
+
+Two prediction heads are trained jointly:
+
+1. **Movement quality regression** — continuous score in $[0,1]$ (error weight set to 0 so the regression head is supervised solely through the MTL loss below).  
+2. **Comment quality classification** — 3-bucket ordinal classes derived from filtering and discretising textual coaching feedback (`--filter-null-comments --comment-quality-buckets 3`), supervised with **balanced class weights** to correct label imbalance.
+
+### 9.4 Multi-task loss scheduling (DeepMTL2R / DWA)
+
+Task loss weights are adapted dynamically using **Dynamic Weight Averaging (DWA)**, following the multi-task loss scheduling methodology of **DeepMTL2R** (Amazon Science, [github.com/amazon-science/DeepMTL2R](https://github.com/amazon-science/DeepMTL2R)):
+
+$$w_k(t) = \frac{K \cdot \exp\!\left(r_k(t-1) / T\right)}{\sum_{i=1}^{K} \exp\!\left(r_i(t-1) / T\right)}, \quad r_k(t) = \frac{\ell_k(t)}{\ell_k(t-1)}$$
+
+where $\ell_k(t)$ is the loss of task $k$ at epoch $t$, $K$ is the number of tasks, and $T$ is a temperature controlling weight sharpness. The DWA window (`--dwa-window 25`) controls the moving-average horizon for loss smoothing, and temperature was set to $T=2.0$ (`--dwa-temp 2.0`). This adaptive scheme avoids manual weight tuning and prevents any single task from dominating gradient updates.
+
+### 9.5 Training configuration
+
+The multi-task run was launched as a background process with full logging:
+
+```bash
+nohup ./venv/bin/python -u train_xlstm_egoexo_multitask.py \
+  --index-csv results/egoexo_fitness_index_split.csv \
+  --feature-mode clip \
+  --clip-features-root notebooks/data/egoexo_fitness_full/features_open/visual \
+  --clip-view all \
+  --clip-max-frames 300 \
+  --clip-subsample-stride 3 \
+  --window 60 --stride 30 \
+  --standardize \
+  --hidden 256 --layers 8 --num-heads 4 \
+  --block-pattern mmmmmmmm \
+  --conv-kernel-size 4 \
+  --projection-factor 1.333 \
+  --dropout 0.15 \
+  --use-fusion --fusion-dim 128 \
+  --use-attention-pool \
+  --mtl-method dwa --dwa-window 25 --dwa-temp 2.0 \
+  --filter-null-comments --comment-quality-buckets 3 \
+  --freeze-backbone --unfreeze-last-n 2 \
+  --epochs 50 --batch-size 32 \
+  --lr 3e-4 --min-lr-ratio 0.01 --warmup-frac 0.1 \
+  --weight-decay 1e-4 --grad-clip 1.0 \
+  --optimizer adamw \
+  --error-weight 0.0 \
+  --balanced-class-weights \
+  --eval-test \
+  --output-dir results/xlstm_egoexo_multitask_allviews_gpu \
+  > results/xlstm_egoexo_multitask_allviews_gpu/train.log 2>&1 &
+```
+
+Key hyperparameters are summarised in Table 9.1.
+
+**Table 9.1 — xLSTM multi-task hyperparameters**
+
+| Group | Parameter | Value |
+|---|---|---|
+| Optimiser | AdamW, lr=3e-4, min-lr-ratio=0.01 | weight_decay=1e-4 |
+| Schedule | Cosine with warmup | warmup_frac=0.1 |
+| Regularisation | Dropout 0.15, grad_clip 1.0 | — |
+| Architecture | Layers 8, hidden 256, heads 4 | proj_factor 1.333 |
+| Windowing | window 60, stride 30, max_frames 300 | subsample_stride 3 |
+| MTL | DWA, window 25, temp 2.0 | error_weight 0.0 |
+| Data | comment_quality_buckets 3, balanced_class_weights | filter_null_comments |
+
+---
+
+## 10. Personalisation (roadmap)
 
 **Goal:** keep a **frozen** base BiLSTM and adapt to each user with a **small** module (e.g. low-rank adapters on the last LSTM layer or a linear calibration on the quality head).
 
@@ -169,7 +252,7 @@ Export JSON with `--json-out`, then generate figures:
 
 ---
 
-## 10. Application integration (roadmap)
+## 11. Application integration (roadmap)
 
 **Target features:**
 
@@ -182,7 +265,7 @@ Export JSON with `--json-out`, then generate figures:
 
 ---
 
-## 11. Limitations
+## 12. Limitations
 
 1. **2D only** — depth ambiguity remains; 3D lifting (e.g. lifting networks on Human3.6M) is not trained here.  
 2. **Heuristic quality** — not expert scores; Spearman correlation to human ratings is future work.  
@@ -191,7 +274,7 @@ Export JSON with `--json-out`, then generate figures:
 
 ---
 
-## 12. Conclusion
+## 13. Conclusion
 
 We described and implemented a **complete pipeline** from RGB video to **exercise recognition** and **quality estimation**, with **reproducible splits**, **ablations** on angle vs coordinate representations, and **optional GCN** baselines. The codebase is structured for extension toward **user personalisation** and a **real-time coaching UI**. Filling Table 7.4 with your full-scale runs and adding screenshots from `docs/figures/` completes the capstone submission.
 
@@ -203,6 +286,7 @@ We described and implemented a **complete pipeline** from RGB video to **exercis
 2. Zeng, M. *A Topology-Aware Graph Convolutional Network for Human Pose Similarity and Action Quality Assessment.* arXiv:2511.01194, 2025.  
 3. Cui, H. et al. *SasMamba: A Lightweight Structure-Aware Stride State Space Model for 3D Human Pose Estimation.* arXiv:2511.08872, 2025.  
 4. QEVD-FIT-COACH dataset layout and pipeline map: `docs/CAPSTONE_PIPELINE.md`.
+5. Amazon Science. *DeepMTL2R: Multi-Task Learning with Dynamic Loss Scheduling.* GitHub: [amazon-science/DeepMTL2R](https://github.com/amazon-science/DeepMTL2R).
 
 ---
 

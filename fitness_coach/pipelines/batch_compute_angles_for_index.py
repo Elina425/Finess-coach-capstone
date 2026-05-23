@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
 For each row in exercise_training_index.csv with an existing short_clips video file,
-run MediaPipe → (optional) keypoint preprocessing → joint angles → save results/exercise_angles/{stem}_biomechanics.npz
+run MediaPipe, Ultralytics YOLO pose, **ViTPose (rtmlib)**, **YOLO26→ViTPose** (YOLO gate + ViTPose
+    keypoints for the same 42-D pipeline), or **RTMPose-X** → (optional) keypoint
+preprocessing → joint angles → save results/exercise_angles/{stem}_biomechanics.npz
 
 **EgoExo-Fitness (frame folders):** if a row has ``frame_root``, ``frame_start``, ``frame_end`` (from ``build_egoexo_fitness_index.py``) and there is no usable ``video_path``, pass ``--dataset-root`` to the
 dataset root (e.g. ``data/EgoExo-Fitness``) and ``--egoexo-view`` (default ``ego_l``) so frames are read
@@ -20,21 +22,56 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import re
 import sys
 from pathlib import Path
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import cv2
 import numpy as np
 
 from fitness_coach.core.biomechanical_features import compute_mixed_sequence_features, compute_sequence_angles
 from fitness_coach.core.pose_estimation_core import (
+    BILATERAL_LIMB_PAIRS,
+    BILATERAL_LIMB_PAIRS_WITH_ANKLES,
+    COCO_KEYPOINTS,
     MediaPipeDetector,
     PoseEstimationResult,
+    RTMPoseXLDetector,
+    UltralyticsCOCOPoseDetector,
+    ViTPoseDetector,
     VideoProcessor,
     apply_keypoint_preprocessing_pipeline,
+    frame_passes_bilateral_coco17,
 )
+
+# Bilateral limb pairs and ``frame_passes_bilateral_coco17`` live in ``pose_estimation_core`` (shared with two-stage YOLO→ViTPose).
+
+
+def write_riccio_raw_keypoints_csv(
+    export_root: Path,
+    exercise_class: str,
+    video_stem: str,
+    pose_results: List[PoseEstimationResult],
+) -> None:
+    """One CSV per video: frame_idx, class, 34 xy (pixels), 17 conf (after bilateral filter)."""
+    out_dir = export_root / exercise_class.replace("/", "_")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    outp = out_dir / f"{video_stem}_raw_keypoints.csv"
+    names = COCO_KEYPOINTS.NAMES
+    xy_cols = [f"{names[j]}_{ax}" for j in range(17) for ax in ("x", "y")]
+    conf_cols = [f"c_{names[j]}" for j in range(17)]
+    header = ["frame_idx", "exercise_class", *xy_cols, *conf_cols]
+    with open(outp, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(header)
+        for r in pose_results:
+            row = [int(r.frame_idx), exercise_class]
+            kp = np.asarray(r.keypoints, dtype=np.float64).reshape(17, 2)
+            row.extend(kp.reshape(-1).tolist())
+            row.extend(np.asarray(r.confidence, dtype=np.float64).reshape(17).tolist())
+            w.writerow(row)
 
 
 def angles_from_video(
@@ -83,47 +120,135 @@ def angles_and_keypoints_from_video(
     mediapipe_quiet: bool = False,
     detection_stride: int = 1,
     detection_max_long_edge: int = 0,
-) -> tuple[np.ndarray, np.ndarray | None] | None:
+    pose_backend: str = "mediapipe",
+    yolo_pose_model: str = "yolo26n-pose.pt",
+    rtmlib_device: str = "cpu",
+    rtmlib_mode: str = "balanced",
+    bilateral_filter: bool = False,
+    bilateral_conf_tau: float = 0.3,
+    bilateral_include_ankles: bool = False,
+    export_csv_root: Optional[Path] = None,
+    csv_exercise_class: Optional[str] = None,
+) -> Optional[Tuple[np.ndarray, Optional[np.ndarray], Dict[str, Any]]]:
     """
-    One MediaPipe pass → (angles (T,8), keypoints (T,17,2)).
+    Pose backends: MediaPipe, YOLO26, ViTPose, RTMPose-X, or **yolo26_then_vitpose** (YOLO26 for
+    detection + optional bilateral gate, ViTPose keypoints fed into the same preprocessing and
+    42-D angle/coordinate construction).
 
-    With ``preprocess=True`` (default), runs normalization + imputation + FPS sync before angles
-    (same order as ``apply_keypoint_preprocessing_pipeline``). Keypoints are then torso-normalized
-    coordinates suitable for ST-GCN / saved NPZs. With ``preprocess=False``, returns raw pixel xy.
-
-    If ``return_keypoints=False``, the second return value is ``None`` (saves memory; use with
-    BiLSTM-only pipelines and ``--skip-keypoints``).
+    Returns ``(angles, keypoints_or_None, meta)`` where ``meta`` includes optional
+    ``techniques_json`` (str) when ``preprocess=True`` for downstream ``*_keypoints.npz``.
     """
-    det = MediaPipeDetector(
-        model_complexity=int(mediapipe_model_complexity),
-        smooth_landmarks=bool(mediapipe_smooth_landmarks),
-        quiet=bool(mediapipe_quiet),
-    )
-    if not getattr(det, "available", True):
-        print("MediaPipe unavailable", file=sys.stderr)
+    meta: Dict[str, Any] = {
+        "pose_backend": (pose_backend or "mediapipe").strip().lower(),
+        "rtmlib_device": str(rtmlib_device or "cpu"),
+        "rtmlib_mode": str(rtmlib_mode or "balanced"),
+    }
+    pb = meta["pose_backend"]
+    use_yolo_then_vit = pb in ("yolo26_then_vitpose", "yolo_then_vitpose")
+    yolo_det: Optional[UltralyticsCOCOPoseDetector] = None
+    vit_det: Optional[ViTPoseDetector] = None
+    det = None
+
+    if use_yolo_then_vit:
+        yolo_det = UltralyticsCOCOPoseDetector(model_name=str(yolo_pose_model), quiet=True)
+        vit_det = ViTPoseDetector(
+            mode=str(rtmlib_mode or "balanced"),
+            device=str(rtmlib_device or "cpu"),
+            quiet=True,
+        )
+        if not yolo_det.available:
+            print(f"Ultralytics pose unavailable ({yolo_pose_model})", file=sys.stderr)
+            return None
+        if not vit_det.available:
+            print(
+                "ViTPose (rtmlib) unavailable for yolo26_then_vitpose — pip install rtmlib onnxruntime",
+                file=sys.stderr,
+            )
+            return None
+    elif pb in ("mediapipe", "mp"):
+        det = MediaPipeDetector(
+            model_complexity=int(mediapipe_model_complexity),
+            smooth_landmarks=bool(mediapipe_smooth_landmarks),
+            quiet=bool(mediapipe_quiet),
+        )
+        if not getattr(det, "available", True):
+            print("MediaPipe unavailable", file=sys.stderr)
+            return None
+    elif pb in ("yolo26", "ultralytics", "yolo"):
+        det = UltralyticsCOCOPoseDetector(model_name=str(yolo_pose_model), quiet=True)
+        if not det.available:
+            print(f"Ultralytics pose unavailable ({yolo_pose_model})", file=sys.stderr)
+            return None
+    elif pb in ("vitpose", "vit_pose"):
+        det = ViTPoseDetector(
+            mode=str(rtmlib_mode or "balanced"),
+            device=str(rtmlib_device or "cpu"),
+            quiet=True,
+        )
+        if not det.available:
+            print("ViTPose (rtmlib) unavailable — pip install rtmlib onnxruntime", file=sys.stderr)
+            return None
+    elif pb in ("rtmpose_x", "rtmpose-x", "rtmposexl"):
+        det = RTMPoseXLDetector(device=str(rtmlib_device or "cpu"), quiet=True)
+        if not det.available:
+            print("RTMPose-X (rtmlib) unavailable — pip install rtmlib onnxruntime", file=sys.stderr)
+            return None
+    else:
+        print(f"Unknown pose_backend={pose_backend!r}", file=sys.stderr)
         return None
+
     vp = VideoProcessor(str(video_path))
     stride = max(1, int(detection_stride))
-    pose_results = vp.process_with_detector(
-        det,
-        max_frames=max_frames,
-        detection_stride=stride,
-        detection_max_long_edge=int(detection_max_long_edge),
-    )
+    if use_yolo_then_vit and yolo_det is not None and vit_det is not None:
+        pose_results = vp.process_yolo_then_vitpose(
+            yolo_det,
+            vit_det,
+            max_frames=max_frames,
+            detection_stride=stride,
+            detection_max_long_edge=int(detection_max_long_edge),
+            bilateral_filter=bilateral_filter,
+            bilateral_conf_tau=float(bilateral_conf_tau),
+            bilateral_include_ankles=bool(bilateral_include_ankles),
+        )
+    else:
+        pose_results = vp.process_with_detector(
+            det,
+            max_frames=max_frames,
+            detection_stride=stride,
+            detection_max_long_edge=int(detection_max_long_edge),
+        )
     measured_fps = float(vp.fps) if vp.fps and vp.fps > 1e-3 else 30.0
     if stride > 1:
         measured_fps = measured_fps / float(stride)
     vp.close()
     if not pose_results:
         return None
+
+    if bilateral_filter and not use_yolo_then_vit:
+        pairs = BILATERAL_LIMB_PAIRS_WITH_ANKLES if bilateral_include_ankles else BILATERAL_LIMB_PAIRS
+        pose_results = [
+            r for r in pose_results if frame_passes_bilateral_coco17(r.confidence, bilateral_conf_tau, pairs=pairs)
+        ]
+    if not pose_results:
+        return None
+
+    if export_csv_root is not None and csv_exercise_class:
+        write_riccio_raw_keypoints_csv(
+            export_csv_root,
+            csv_exercise_class,
+            Path(video_path).stem,
+            pose_results,
+        )
+
     arr = np.stack([r.keypoints for r in pose_results], axis=0)
 
     if not preprocess:
         angles, _ = compute_sequence_angles(arr)
         ang_out = angles.astype(np.float32)
+        meta["techniques_json"] = None
         if return_keypoints:
-            return ang_out, arr.astype(np.float32)
-        return ang_out, None
+            return ang_out, arr.astype(np.float32), meta
+        return ang_out, None, meta
 
     kp_seq = [arr[i].astype(np.float32).copy() for i in range(arr.shape[0])]
     conf_seq = [np.asarray(r.confidence, dtype=np.float32).copy() for r in pose_results]
@@ -146,9 +271,10 @@ def angles_and_keypoints_from_video(
     fk = np.stack(processed["final_keypoints"], axis=0)
     angles, _ = compute_sequence_angles(fk)
     ang_out = angles.astype(np.float32)
+    meta["techniques_json"] = json.dumps(processed.get("techniques_applied", {}))
     if return_keypoints:
-        return ang_out, fk.astype(np.float32)
-    return ang_out, None
+        return ang_out, fk.astype(np.float32), meta
+    return ang_out, None, meta
 
 
 def riccio_parallel_video_job(job: dict) -> dict:
@@ -161,7 +287,103 @@ def riccio_parallel_video_job(job: dict) -> dict:
     idx = int(job["index"])
     vp = Path(job["video_path"])
     cls = str(job["exercise_class"])
+    rep = str(job.get("representation", "angles")).strip().lower()
+
+    if rep == "resnet_backbone":
+        from fitness_coach.preprocessing.resnet_frame_features import resnet_frame_features_from_yolo_video
+
+        out = resnet_frame_features_from_yolo_video(
+            vp,
+            job["max_frames"],
+            yolo_pose_model=str(job.get("yolo_pose_model", "yolo26n-pose.pt")),
+            bilateral_filter=bool(job.get("bilateral_filter", False)),
+            bilateral_conf_tau=float(job.get("bilateral_conf_tau", 0.3)),
+            bilateral_include_ankles=bool(job.get("bilateral_include_ankles", False)),
+            detection_stride=int(job.get("detection_stride", 1)),
+            detection_max_long_edge=int(job.get("detection_max_long_edge", 0)),
+            source_fps=job.get("source_fps"),
+            target_fps=float(job["target_fps"]),
+            preprocessing_techniques=job.get("preprocessing_techniques"),
+            resnet_variant=str(job.get("resnet_variant", "resnet50")),
+            resnet_device=str(job.get("resnet_device", "cpu")),
+            bbox_margin=float(job.get("bbox_margin", 0.12)),
+            strict_pipeline_crops=bool(job.get("strict_pipeline_crops", True)),
+            return_conceptual_cleaned_keypoints=bool(
+                job.get("save_conceptual_cleaned_keypoints", True)
+            ),
+        )
+        if out is None:
+            return {"index": idx, "ok": False, "exercise_class": cls, "source": str(vp)}
+        fe, meta = out
+        if fe.shape[0] == 0:
+            return {"index": idx, "ok": False, "exercise_class": cls, "source": str(vp)}
+        outj: Dict[str, Any] = {
+            "index": idx,
+            "ok": True,
+            "representation": "resnet_backbone",
+            "frame_features": fe,
+            "angles": None,
+            "keypoints": None,
+            "exercise_class": cls,
+            "source": str(vp),
+            "techniques_json": meta.get("techniques_json"),
+            "feat_dim": int(fe.shape[1]),
+        }
+        ck = meta.get("conceptual_cleaned_keypoints")
+        if ck is not None:
+            outj["conceptual_cleaned_keypoints"] = ck
+        return outj
+
+    if rep == "vit_backbone":
+        from fitness_coach.preprocessing.vit_frame_features import vit_frame_features_from_yolo_video
+
+        out = vit_frame_features_from_yolo_video(
+            vp,
+            job["max_frames"],
+            yolo_pose_model=str(job.get("yolo_pose_model", "yolo26n-pose.pt")),
+            bilateral_filter=bool(job.get("bilateral_filter", False)),
+            bilateral_conf_tau=float(job.get("bilateral_conf_tau", 0.3)),
+            bilateral_include_ankles=bool(job.get("bilateral_include_ankles", False)),
+            detection_stride=int(job.get("detection_stride", 1)),
+            detection_max_long_edge=int(job.get("detection_max_long_edge", 0)),
+            source_fps=job.get("source_fps"),
+            target_fps=float(job["target_fps"]),
+            preprocessing_techniques=job.get("preprocessing_techniques"),
+            vit_feature_encoder=str(job.get("vit_feature_encoder", "paper")),
+            vitpose_checkpoint=job.get("vitpose_checkpoint"),
+            vit_model_name=str(job.get("vit_model_name", "vit_small_patch16_224")),
+            vit_device=str(job.get("vit_device", "cpu")),
+            bbox_margin=float(job.get("bbox_margin", 0.12)),
+            strict_pipeline_crops=bool(job.get("strict_pipeline_crops", True)),
+            return_conceptual_cleaned_keypoints=bool(
+                job.get("save_conceptual_cleaned_keypoints", True)
+            ),
+        )
+        if out is None:
+            return {"index": idx, "ok": False, "exercise_class": cls, "source": str(vp)}
+        fe, meta = out
+        if fe.shape[0] == 0:
+            return {"index": idx, "ok": False, "exercise_class": cls, "source": str(vp)}
+        outj = {
+            "index": idx,
+            "ok": True,
+            "representation": "vit_backbone",
+            "frame_features": fe,
+            "angles": None,
+            "keypoints": None,
+            "exercise_class": cls,
+            "source": str(vp),
+            "techniques_json": meta.get("techniques_json"),
+            "feat_dim": int(fe.shape[1]),
+        }
+        ck = meta.get("conceptual_cleaned_keypoints")
+        if ck is not None:
+            outj["conceptual_cleaned_keypoints"] = ck
+        return outj
+
     skip_keypoints = bool(job["skip_keypoints"])
+    csv_root = job.get("export_csv_root")
+    csv_path = Path(csv_root) if csv_root else None
     both = angles_and_keypoints_from_video(
         vp,
         job["max_frames"],
@@ -179,23 +401,36 @@ def riccio_parallel_video_job(job: dict) -> dict:
         mediapipe_quiet=bool(job.get("mediapipe_quiet", True)),
         detection_stride=int(job.get("detection_stride", 1)),
         detection_max_long_edge=int(job.get("detection_max_long_edge", 0)),
+        pose_backend=str(job.get("pose_backend", "mediapipe")),
+        yolo_pose_model=str(job.get("yolo_pose_model", "yolo26n-pose.pt")),
+        rtmlib_device=str(job.get("rtmlib_device", "cpu")),
+        rtmlib_mode=str(job.get("rtmlib_mode", "balanced")),
+        bilateral_filter=bool(job.get("bilateral_filter", False)),
+        bilateral_conf_tau=float(job.get("bilateral_conf_tau", 0.3)),
+        bilateral_include_ankles=bool(job.get("bilateral_include_ankles", False)),
+        export_csv_root=csv_path,
+        csv_exercise_class=cls if csv_path is not None else None,
     )
     if both is None:
         return {"index": idx, "ok": False, "exercise_class": cls, "source": str(vp)}
-    ang, kp = both
+    ang, kp, meta = both
     if ang.shape[0] == 0:
         return {"index": idx, "ok": False, "exercise_class": cls, "source": str(vp)}
     if not skip_keypoints:
         if kp is None or kp.shape[0] != ang.shape[0]:
             return {"index": idx, "ok": False, "exercise_class": cls, "source": str(vp)}
-    return {
+    out: Dict[str, Any] = {
         "index": idx,
         "ok": True,
+        "representation": "angles",
+        "frame_features": None,
         "angles": ang,
         "keypoints": kp,
         "exercise_class": cls,
         "source": str(vp),
+        "techniques_json": meta.get("techniques_json"),
     }
+    return out
 
 
 def mixed_features_from_video(video_path: Path, max_frames: int | None) -> np.ndarray | None:
@@ -490,13 +725,14 @@ def main() -> int:
             vid = _resolve_video_path(row, dataset_root)
             ang = None
             kp = None
+            kp_meta: Dict[str, Any] = {}
             source_meta = ""
 
             if vid is not None:
                 if need_kp:
                     both = angles_and_keypoints_from_video(vid, mf)
                     if both is not None:
-                        ang, kp = both
+                        ang, kp, kp_meta = both
                         if ang is not None:
                             source_meta = str(vid)
                 else:
@@ -565,7 +801,11 @@ def main() -> int:
             )
             if need_kp:
                 if kp is not None and kp.shape[0] == ang.shape[0]:
-                    np.savez_compressed(kp_out, keypoints=kp.astype(np.float32))
+                    kw: Dict[str, Any] = {"keypoints": kp.astype(np.float32)}
+                    tj = kp_meta.get("techniques_json") if isinstance(kp_meta, dict) else None
+                    if tj:
+                        kw["techniques_json"] = np.array(str(tj))
+                    np.savez_compressed(kp_out, **kw)
                 else:
                     print(
                         f"  (warn) --save-keypoints but no keypoints for stem={stem!r} — "

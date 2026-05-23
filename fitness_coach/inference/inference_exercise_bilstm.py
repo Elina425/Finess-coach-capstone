@@ -15,7 +15,7 @@ import torch
 
 from fitness_coach.pipelines.batch_compute_angles_for_index import angles_from_video, mixed_features_from_video
 from fitness_coach.datasets.text_coaching_features import TextCoachingEncoder
-from fitness_coach.models.exercise_bilstm_model import build_exercise_bilstm_from_checkpoint
+from fitness_coach.models.exercise_bilstm_model import build_exercise_bilstm_from_checkpoint, unpack_bilstm_outputs
 
 
 @torch.no_grad()
@@ -32,6 +32,7 @@ def predict_video(
         ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
     except TypeError:
         ckpt = torch.load(ckpt_path, map_location=device)
+    has_reg = bool(ckpt.get("has_regression_head", True))
     num_classes = int(ckpt["num_classes"])
     classes: list = ckpt.get("classes", [])
     feature_mode = str(ckpt.get("feature_mode", "angles"))
@@ -103,18 +104,22 @@ def predict_video(
                 tb = torch.from_numpy(text_vec).float().unsqueeze(0).to(device)
             else:
                 tb = x.new_zeros(1, text_dim)
-            logits, q = model(x, tb)
+            logits, q = unpack_bilstm_outputs(model(x, tb))
         else:
-            logits, q = model(x)
+            logits, q = unpack_bilstm_outputs(model(x, None))
         p = torch.softmax(logits, dim=1).cpu().numpy()[0]
         probs_sum += p
-        q_sum += float(q.cpu().item())
+        if q is not None and has_reg:
+            q_sum += float(q.cpu().item())
 
     n = len(windows)
     probs = probs_sum / n
     top = int(np.argmax(probs))
     print("Predicted exercise:", classes[top] if top < len(classes) else top, f"(p={probs[top]:.3f})")
-    print("Mean quality estimate:", q_sum / n)
+    if has_reg:
+        print("Mean quality estimate:", q_sum / n)
+    else:
+        print("Quality head: not in this checkpoint (classification-only).")
     print("Top-3 classes:")
     order = np.argsort(-probs)[:3]
     for j in order:

@@ -38,7 +38,7 @@ from fitness_coach.evaluation.classification_metrics import (
 )
 from fitness_coach.datasets.exercise_bilstm_dataset import ExerciseAngleWindowDataset, load_index_rows
 from fitness_coach.datasets.text_coaching_features import TextCoachingEncoder
-from fitness_coach.models.exercise_bilstm_model import build_exercise_bilstm_from_checkpoint
+from fitness_coach.models.exercise_bilstm_model import build_exercise_bilstm_from_checkpoint, unpack_bilstm_outputs
 from fitness_coach.datasets.exercise_keypoint_window_dataset import ExerciseKeypointWindowDataset
 from fitness_coach.models.gcn_pose_model import GCNSequenceExerciseNet
 
@@ -72,6 +72,7 @@ def eval_bilstm(
     scale_mean = ckpt.get("scale_mean")
     scale_std = ckpt.get("scale_std")
     text_dim = int(ckpt.get("text_dim", 0))
+    has_reg = bool(ckpt.get("has_regression_head", True))
 
     kp_dir = Path(keypoints_dir) if feature_mode in ("mixed", "coords") else None
 
@@ -127,12 +128,15 @@ def eval_bilstm(
             xb, y_cls, y_q = batch
             tb = None
         xb = xb.to(device)
-        logits, pred_q = model(xb, tb)
+        logits, pred_q = unpack_bilstm_outputs(model(xb, tb))
         pr = logits.argmax(dim=1).cpu().numpy()
         ys.extend(y_cls.numpy().tolist())
         preds.extend(pr.tolist())
         qs.extend(y_q.numpy().tolist())
-        qhats.extend(pred_q.cpu().numpy().tolist())
+        if pred_q is not None and has_reg:
+            qhats.extend(pred_q.cpu().numpy().tolist())
+        else:
+            qhats.extend([float("nan")] * int(xb.size(0)))
 
     tag = f"bilstm_{feature_mode}"
     return (
@@ -204,6 +208,8 @@ def eval_gcn_supervised(
 
 
 def regression_metrics(q_true: np.ndarray, q_pred: np.ndarray) -> Dict:
+    if q_pred.size == 0 or not np.isfinite(q_pred).all():
+        return {"mae": float("nan"), "r2": float("nan")}
     mae = float(mean_absolute_error(q_true, q_pred))
     if np.var(q_true) < 1e-12:
         r2 = float("nan")
